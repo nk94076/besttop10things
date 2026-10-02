@@ -115,6 +115,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    elseif(trim((string)($in['image']??''))===''&&!empty($in['image_pick']))$in['image']=(string)$in['image_pick'];
    $id=savePost($in,$id);
    $state=postState(query('SELECT status,published_at FROM reviews WHERE id=?',[$id])[0]);
+   if($state==='published')indexNowPing([reviewUrl(query('SELECT slug FROM reviews WHERE id=?',[$id])[0]),'/','/sitemap.xml']);
    flash(['published'=>'Post published.','scheduled'=>'Post scheduled.','draft'=>'Draft saved.'][$state],'/admin.php?view=edit&id='.$id);
   }
   if($action==='quick_draft'){
@@ -129,6 +130,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    $in=implode(',',array_fill(0,count($ids),'?'));
    $map=['publish'=>"status='published'",'draft'=>"status='draft'",'trash'=>"status='trash'",'restore'=>"status='draft'"];
    if(isset($map[$do]))run("UPDATE reviews SET {$map[$do]},updated_at=? WHERE id IN ($in)",[date('c'),...$ids]);
+   if($do==='publish')indexNowPing(array_map('reviewUrl',query("SELECT slug FROM reviews r WHERE id IN ($in) AND ".live(),$ids)));
    elseif($do==='delete')run("DELETE FROM reviews WHERE status='trash' AND id IN ($in)",$ids);
    else throw new RuntimeException('Choose a bulk action.');
    $n=count($ids);$labels=['publish'=>'published','draft'=>'moved to drafts','trash'=>'moved to the Trash','restore'=>'restored from the Trash','delete'=>'permanently deleted'];
@@ -203,7 +205,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    if(!$menu)throw new RuntimeException('Add at least one menu item.');
    if(count($menu)>10)throw new RuntimeException('Use at most 10 menu items.');
    $save('menu',json_encode($menu,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
-   foreach(['seo_title'=>200,'meta_keywords'=>500,'google_verification'=>200] as $k=>$max){$v=trim((string)($_POST[$k]??''));if(strlen($v)>$max)throw new RuntimeException('An SEO field is too long.');$save($k,$v);}
+   foreach(['seo_title'=>200,'meta_keywords'=>500,'google_verification'=>200,'bing_verification'=>200,'ga_id'=>30] as $k=>$max){$v=trim((string)($_POST[$k]??''));if(strlen($v)>$max)throw new RuntimeException('An SEO field is too long.');if($k==='ga_id'&&$v!==''&&!preg_match('/^G-[A-Z0-9]{4,20}$/',$v))throw new RuntimeException('The Google Analytics ID looks like G-XXXXXXXXXX.');$save($k,$v);}
    flash('Appearance saved.','/admin.php?view=appearance');
   }
   if($action==='tracking'){
@@ -490,6 +492,9 @@ if(!isset($titles[$view]))$view='dashboard';
      <p class="hint">The default meta description is the homepage description in <a href="/admin.php?view=settings">Settings</a>. Each post has its own SEO title and description in the editor.</p>
      <label><span class="lbl">Keywords <span class="muted">(comma separated)</span></span><textarea class="input" name="meta_keywords" rows="2" maxlength="500" placeholder="best products, reviews, top 10 lists, buying guides"><?= e(setting('meta_keywords')) ?></textarea></label>
      <label>Google Search Console verification code<input class="input" name="google_verification" value="<?= e(setting('google_verification')) ?>" maxlength="200" placeholder="Only the content value, e.g. abc123…"></label>
+     <label>Bing Webmaster Tools verification code <span class="muted">(msvalidate.01)</span><input class="input" name="bing_verification" value="<?= e(setting('bing_verification')) ?>" maxlength="200" placeholder="Only the content value"></label>
+     <label>Google Analytics measurement ID<input class="input" name="ga_id" value="<?= e(setting('ga_id','G-Z6E5E0V0Q3')) ?>" maxlength="30" placeholder="G-XXXXXXXXXX"></label>
+     <p class="hint">Search engines and AI assistants are pinged automatically (IndexNow) when you publish. Sitemap: <code>/sitemap.xml</code> · AI summary: <code>/llms.txt</code></p>
     </div></section>
    </div>
   </div>

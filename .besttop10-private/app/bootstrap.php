@@ -8,7 +8,7 @@ session_start();
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('X-Frame-Options: DENY');
-header("Content-Security-Policy: default-src 'self'; img-src 'self' https:; style-src 'self'; script-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'");
+header("Content-Security-Policy: default-src 'self'; img-src 'self' https:; style-src 'self'; script-src 'self' https://www.googletagmanager.com; connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; form-action 'self'; base-uri 'self'; frame-ancestors 'none'");
 $dbPath = getenv('APP_DB') ?: ROOT . '/storage/site.sqlite';
 $db = new PDO('sqlite:' . $dbPath, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 $db->exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
@@ -161,4 +161,42 @@ function clientIp(): string {
   foreach(['HTTP_CF_CONNECTING_IP','HTTP_X_REAL_IP','HTTP_X_FORWARDED_FOR'] as $h){$c=trim(explode(',',(string)($_SERVER[$h]??''))[0]);if(filter_var($c,FILTER_VALIDATE_IP))return $c;}
  }
  return $ip;
+}
+
+// ---- SEO helpers ----
+// Absolute site root, e.g. https://www.besttop10things.com (CLI scripts fall back to the live domain).
+function siteBase(): string {
+ $host=strtolower((string)($_SERVER['HTTP_HOST']??''));
+ if(!preg_match('/^[a-z0-9.-]+(:\d+)?$/',$host))$host='www.besttop10things.com';
+ return 'https://'.$host;
+}
+function absUrl(string $url): string { return str_starts_with($url,'/')?siteBase().$url:$url; }
+// Rough language guess for imported articles (en/de/fr) so <html lang> and inLanguage are right.
+function detectLang(string $text): string {
+ $words=preg_split('/[^\p{L}]+/u',mb_strtolower(mb_substr(strip_tags($text),0,3000)),-1,PREG_SPLIT_NO_EMPTY);
+ $sets=['de'=>['und','der','die','das','ist','nicht','mit','sich','auch','für','eine','werden','du','oder'],'fr'=>['les','des','est','pour','une','dans','vous','avec','sur','pas','qui','votre','sont','plus'],'en'=>['the','and','is','for','with','you','your','that','are','this','can','of','to','or']];
+ $score=array_map(fn($set)=>count(array_intersect($words,$set)),$sets);
+ arsort($score);return (string)array_key_first($score);
+}
+// Question/answer pairs from a "## Frequently Asked Questions" / "## FAQ" section (**Question** then answer lines).
+function faqFrom(string $body): array {
+ if(!preg_match('/^##\s+(?:FAQs?|Frequently Asked Questions|Häufig gestellte Fragen|Questions fréquentes)[^\n]*\n(.*?)(?=^##\s|\z)/imsu',$body,$m))return [];
+ preg_match_all('/^\*\*(.+?)\*\*\s*\n((?:(?!\*\*).+\n?)+)/mu',$m[1],$qa,PREG_SET_ORDER);
+ $out=[];foreach($qa as $x){$a=trim(preg_replace('/\[([^\]]+)\]\([^)]+\)/','$1',str_replace('**','',$x[2])));if($a!=='')$out[]=[trim($x[1]),$a];}
+ return $out;
+}
+// IndexNow (Bing, Yandex, Seznam, Naver; used by ChatGPT search via Bing): a key file is served at /{key}.txt.
+function indexNowKey(): string {
+ $k=setting('indexnow_key');
+ if(!preg_match('/^[a-f0-9]{32}$/',$k)){$k=bin2hex(random_bytes(16));run('INSERT OR REPLACE INTO settings(key,value) VALUES (?,?)',['indexnow_key',$k]);}
+ return $k;
+}
+function indexNowPing(array $urls): bool {
+ $urls=array_values(array_unique(array_map('absUrl',$urls)));
+ if(!$urls||!function_exists('curl_init'))return false;
+ $host=(string)parse_url(siteBase(),PHP_URL_HOST);$key=indexNowKey();
+ $ch=curl_init('https://api.indexnow.org/indexnow');
+ curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_HTTPHEADER=>['Content-Type: application/json; charset=utf-8'],CURLOPT_POSTFIELDS=>json_encode(['host'=>$host,'key'=>$key,'keyLocation'=>siteBase().'/'.$key.'.txt','urlList'=>array_slice($urls,0,10000)]),CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>4,CURLOPT_CONNECTTIMEOUT=>3]);
+ curl_exec($ch);$code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
+ return $code>=200&&$code<300;
 }

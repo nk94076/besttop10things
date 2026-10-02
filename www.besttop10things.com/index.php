@@ -6,11 +6,18 @@ require ROOT.'/app/layout.php';
 
 // Routing: clean URLs, with 301 redirects from the old "/?page=…" links.
 $path=rtrim(rawurldecode((string)parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH)),'/')?:'/';
-$routes=['/'=>'home','/index.php'=>'home','/reviews'=>'reviews','/top-10'=>'top10','/categories'=>'categories','/compare'=>'compare','/about'=>'about','/privacy'=>'privacy','/sitemap.xml'=>'sitemap','/robots.txt'=>'robots'];
+$routes=['/'=>'home','/index.php'=>'home','/reviews'=>'reviews','/top-10'=>'top10','/categories'=>'categories','/compare'=>'compare','/about'=>'about','/privacy'=>'privacy','/sitemap.xml'=>'sitemap','/robots.txt'=>'robots','/feed.xml'=>'feed','/llms.txt'=>'llms','/llms-full.txt'=>'llmsfull'];
 if(($routes[$path]??'')==='home'&&isset($_GET['page'])&&$_SERVER['REQUEST_METHOD']==='GET'){
  $target=cleanUrl('/?'.(string)($_SERVER['QUERY_STRING']??''));
  if(!str_starts_with($target,'/?')){header('Location: '.$target,true,301);exit;}
 }
+// One URL per page: drop trailing slashes and /index.php (keeps the query string).
+$rawPath=(string)parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH);
+if(in_array($_SERVER['REQUEST_METHOD'],['GET','HEAD'],true)&&($rawPath==='/index.php'||($rawPath!=='/'&&str_ends_with($rawPath,'/')))){
+ $qs=(string)($_SERVER['QUERY_STRING']??'');header('Location: '.($rawPath==='/index.php'?'/':(rtrim($rawPath,'/')?:'/')).($qs!==''?'?'.$qs:''),true,301);exit;
+}
+// IndexNow ownership key file
+if(preg_match('~^/([a-f0-9]{32})\.txt$~',$path,$m)&&hash_equals(indexNowKey(),$m[1])){header('Content-Type: text/plain; charset=utf-8');exit($m[1]);}
 // Outgoing link click: log it, then send the visitor on to the stored destination.
 if(preg_match('~^/go/(\d+)$~',$path,$m)){
  $link=query('SELECT * FROM links WHERE id=?',[(int)$m[1]])[0]??null;
@@ -37,18 +44,48 @@ if($page==='404')http_response_code(404);
 
 if($page==='robots'){
  header('Content-Type: text/plain; charset=utf-8');
- echo "User-agent: *\nDisallow: /admin.php\nDisallow: /go/\n\nSitemap: https://".($_SERVER['HTTP_HOST']??'')."/sitemap.xml\n";exit;
+ $rules="Allow: /\nDisallow: /admin.php\nDisallow: /go/\nDisallow: /*?q=\n";
+ $out="User-agent: *\n$rules\n";
+ // Search and AI answer engines are welcome to read and cite the articles.
+ foreach(['Googlebot','Bingbot','Google-Extended','GPTBot','OAI-SearchBot','ChatGPT-User','ClaudeBot','Claude-SearchBot','Claude-User','PerplexityBot','Perplexity-User','Applebot','Applebot-Extended','DuckAssistBot','Meta-ExternalAgent','CCBot','Amazonbot'] as $bot)$out.="User-agent: $bot\n$rules\n";
+ echo $out."Sitemap: ".siteBase()."/sitemap.xml\n";exit;
 }
 if($page==='sitemap'){
  header('Content-Type: application/xml; charset=utf-8');
- $base='https://'.($_SERVER['HTTP_HOST']??'');
- $urls=[['/',date('Y-m-d')]];
- foreach(['reviews','top10','categories','compare','about','privacy'] as $p)$urls[]=[pagePath($p),null];
- foreach(categories() as $c)if($c['total'])$urls[]=['/category/'.rawurlencode($c['slug']),null];
- foreach(query('SELECT r.slug,r.updated_at FROM reviews r WHERE '.live().' ORDER BY r.published_at DESC') as $r)$urls[]=[reviewUrl($r),substr($r['updated_at'],0,10)];
- echo '<?xml version="1.0" encoding="UTF-8"?>'."\n".'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
- foreach($urls as [$u,$mod])echo '<url><loc>'.e($base.$u).'</loc>'.($mod?'<lastmod>'.e($mod).'</lastmod>':'').'</url>';
+ $base=siteBase();
+ $posts=query('SELECT r.slug,r.title,r.image,r.updated_at,r.published_at,c.slug AS cslug FROM reviews r JOIN categories c ON c.id=r.category_id WHERE '.live().' ORDER BY r.published_at DESC');
+ $newest=$posts?substr(max(array_map(fn($r)=>max((string)$r['updated_at'],(string)$r['published_at']),$posts)),0,10):date('Y-m-d');
+ $catMod=[];foreach($posts as $r)$catMod[$r['cslug']]=max($catMod[$r['cslug']]??'',substr(max((string)$r['updated_at'],(string)$r['published_at']),0,10));
+ $urls=[['/',$newest,null]];
+ foreach(['reviews','top10','categories','compare','about','privacy'] as $p)$urls[]=[pagePath($p),in_array($p,['reviews','top10','categories'],true)?$newest:null,null];
+ foreach(categories() as $c)if($c['total'])$urls[]=['/category/'.rawurlencode($c['slug']),$catMod[$c['slug']]??null,null];
+ foreach($posts as $r)$urls[]=[reviewUrl($r),substr(max((string)$r['updated_at'],(string)$r['published_at']),0,10),safeImage($r['image'])?[absUrl($r['image']),$r['title']]:null];
+ echo '<?xml version="1.0" encoding="UTF-8"?>'."\n".'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">';
+ foreach($urls as [$u,$mod,$im])echo '<url><loc>'.e($base.$u).'</loc>'.($mod?'<lastmod>'.e($mod).'</lastmod>':'').($im?'<image:image><image:loc>'.e($im[0]).'</image:loc></image:image>':'').'</url>';
  echo '</urlset>';exit;
+}
+if($page==='feed'){
+ header('Content-Type: application/rss+xml; charset=utf-8');
+ $base=siteBase();$site=setting('site_name');
+ $items=query('SELECT r.*,c.name AS category FROM reviews r JOIN categories c ON c.id=r.category_id WHERE '.live().' ORDER BY r.published_at DESC,r.id DESC LIMIT 30');
+ echo '<?xml version="1.0" encoding="UTF-8"?>'."\n".'<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>'.e($site).'</title><link>'.e($base.'/').'</link><description>'.e(setting('description')).'</description><language>en</language><atom:link href="'.e($base.'/feed.xml').'" rel="self" type="application/rss+xml"/>';
+ foreach($items as $r){$u=$base.reviewUrl($r);echo '<item><title>'.e($r['title']).'</title><link>'.e($u).'</link><guid isPermaLink="true">'.e($u).'</guid><pubDate>'.e(date(DATE_RSS,strtotime($r['published_at']??$r['created_at']))).'</pubDate><category>'.e($r['category']).'</category><description>'.e($r['excerpt']).'</description></item>';}
+ echo '</channel></rss>';exit;
+}
+// llms.txt: a plain-text map of the site for AI assistants (llmstxt.org); llms-full.txt adds the article text.
+if($page==='llms'||$page==='llmsfull'){
+ header('Content-Type: text/plain; charset=utf-8');header('X-Robots-Tag: noindex');
+ $base=siteBase();$full=$page==='llmsfull';
+ $rows=query('SELECT r.*,c.name AS category FROM reviews r JOIN categories c ON c.id=r.category_id WHERE '.live().' ORDER BY c.name,r.published_at DESC');
+ echo '# '.setting('site_name')."\n\n> ".setting('description')."\n\nIndependent reviews, buying guides and top 10 lists. Each article is written and edited by our team; some links are affiliate links.\n\n## Sections\n\n- [All reviews]($base/reviews)\n- [Top 10 lists]($base/top-10)\n- [Categories]($base/categories)\n- [About]($base/about)\n";
+ if(!$full)echo "- [Full article text]($base/llms-full.txt)\n";
+ $group=null;
+ foreach($rows as $r){
+  if($full){echo "\n---\n\n# ".$r['title']."\n\nURL: $base".reviewUrl($r)."\nCategory: ".$r['category']."\nPublished: ".substr((string)($r['published_at']??$r['created_at']),0,10)."\n\n".trim(preg_replace('/\[([^\]]+)\]\([^)]+\)/','$1',$r['body']))."\n";continue;}
+  if($group!==$r['category']){$group=$r['category'];echo "\n## $group\n\n";}
+  echo '- ['.$r['title']."]($base".reviewUrl($r).'): '.trim(preg_replace('/\s+/',' ',$r['excerpt']))."\n";
+ }
+ exit;
 }
 
 if($_SERVER['REQUEST_METHOD']==='GET')captureVisit();
@@ -69,8 +106,35 @@ if ($page==='review') {
 }
 $valid=['home','review','reviews','top10','categories','about','privacy','compare','404'];
 if(!in_array($page,$valid,true)){http_response_code(404);$page='404';}
-$titles=['home'=>'','reviews'=>'Reviews','top10'=>'Top 10 Lists','categories'=>'Categories','about'=>'About','privacy'=>'Privacy','compare'=>'Compare','404'=>'Page not found'];
-headerView($page==='review'?($review['meta_title']?:$review['title']):$titles[$page],$page==='review'?($review['meta_description']?:$review['excerpt']):'',$page==='review'?'reviews':$page);
+$titles=['home'=>'','reviews'=>'All Reviews & Buying Guides','top10'=>'Top 10 Lists: Our Highest-Rated Picks','categories'=>'Browse All Categories','about'=>'About Us','privacy'=>'Privacy Policy','compare'=>'Compare Top-Rated Picks Side by Side','404'=>'Page not found'];
+$descs=['reviews'=>'Browse every review and buying guide on '.setting('site_name').': honest trade-offs, practical tips and clear recommendations across tech, travel, shopping, lifestyle and more.','top10'=>'Our ten highest-rated and newest picks, ranked, with quick scores and links to the full reviews.','categories'=>'Explore reviews and buying guides by category, from tech and travel to fashion, home, education and more.','compare'=>'Compare our top-rated picks side by side: scores, pros and cons at a glance.','about'=>'Who we are, how we research and write our reviews, and how we keep our recommendations independent.','privacy'=>'How '.setting('site_name').' collects, uses and protects information, including cookies and outbound link tracking.','404'=>'The page you were looking for could not be found.'];
+$base=siteBase();$crumb=fn(array $items)=>['@type'=>'BreadcrumbList','itemListElement'=>array_map(fn($i,$x)=>['@type'=>'ListItem','position'=>$i+1,'name'=>$x[0],'item'=>$base.$x[1]],array_keys($items),$items)];
+$seo=[];$pageTitle=$titles[$page]??'';$pageDesc=$descs[$page]??'';
+if($page==='review'){
+ $r0=$review;$url=$base.reviewUrl($r0);$lang=detectLang($r0['title'].' '.$r0['body']);
+ $pub=date('c',strtotime($r0['published_at']??$r0['created_at']));$mod=date('c',max(strtotime($r0['updated_at']),strtotime($r0['published_at']??$r0['created_at'])));
+ $pageTitle=$r0['meta_title']?:$r0['title'];$pageDesc=$r0['meta_description']?:$r0['excerpt'];
+ $article=['@type'=>'BlogPosting','@id'=>$url.'#article','mainEntityOfPage'=>$url,'url'=>$url,'headline'=>mb_substr($r0['title'],0,110),'description'=>$pageDesc,'datePublished'=>$pub,'dateModified'=>$mod,'inLanguage'=>$lang,'articleSection'=>$r0['category'],'wordCount'=>str_word_count(strip_tags($r0['body'])),'author'=>['@type'=>'Organization','name'=>$r0['author']?:setting('site_name'),'url'=>$base.'/about'],'publisher'=>['@id'=>$base.'/#org'],'isPartOf'=>['@id'=>$base.'/#website']];
+ if(safeImage($r0['image']))$article['image']=['@type'=>'ImageObject','url'=>absUrl($r0['image'])];
+ if(($r0['brand']??'')!=='')$article['mentions']=['@type'=>'Brand','name'=>$r0['brand']];
+ $seo=['type'=>'article','image'=>$r0['image'],'published'=>$pub,'modified'=>$mod,'section'=>$r0['category'],'lang'=>$lang,'jsonld'=>[$article,$crumb([['Home','/'],[$r0['category'],'/category/'.rawurlencode($r0['category_slug'])],[$r0['title'],reviewUrl($r0)]])]];
+ if($faq=faqFrom($r0['body']))$seo['jsonld'][]=['@type'=>'FAQPage','@id'=>$url.'#faq','mainEntity'=>array_map(fn($x)=>['@type'=>'Question','name'=>$x[0],'acceptedAnswer'=>['@type'=>'Answer','text'=>$x[1]]],$faq)];
+ if(isset($_GET['preview']))$seo['robots']='noindex, nofollow';
+}elseif($page==='reviews'||$page==='top10'){
+ $catSlug=(string)($_GET['category']??'');$curCat=null;foreach($cats as $c)if($c['slug']===$catSlug)$curCat=$c;
+ if($curCat){
+  $pageTitle=$page==='top10'?'Top 10 '.$curCat['name'].' Picks':$curCat['name'].' Reviews & Buying Guides';
+  $pageDesc=$page==='top10'?'Our ten best-rated '.$curCat['name'].' reviews and guides, ranked.':'The latest '.$curCat['name'].' reviews, buying guides and tips from '.setting('site_name').': '.$curCat['total'].' article'.($curCat['total']==1?'':'s').' with honest pros, cons and recommendations.';
+ }
+ $listed=query($join.'WHERE '.live().($curCat?' AND c.slug=?':'').' ORDER BY '.($page==='top10'?'r.score DESC,':'').'r.published_at DESC LIMIT '.($page==='top10'?10:20),$curCat?[$catSlug]:[]);
+ $selfPath=$curCat&&$page==='reviews'?'/category/'.rawurlencode($catSlug):pagePath($page);
+ $seo['jsonld']=[['@type'=>'CollectionPage','@id'=>$base.$selfPath.'#page','url'=>$base.$selfPath,'name'=>$pageTitle,'description'=>$pageDesc,'isPartOf'=>['@id'=>$base.'/#website'],'mainEntity'=>['@type'=>'ItemList','itemListOrder'=>$page==='top10'?'https://schema.org/ItemListOrderDescending':'https://schema.org/ItemListUnordered','numberOfItems'=>count($listed),'itemListElement'=>array_map(fn($i,$x)=>['@type'=>'ListItem','position'=>$i+1,'url'=>$base.reviewUrl($x),'name'=>$x['title']],array_keys($listed),$listed)]],$crumb(array_merge([['Home','/']],$curCat?[[$page==='top10'?'Top 10 Lists':'Reviews',pagePath($page)],[$curCat['name'],$selfPath]]:[[$titles[$page],pagePath($page)]]))];
+ if($page==='top10'&&$curCat)$seo['canonical']=pagePath('top10').'?category='.rawurlencode($catSlug);
+ if(trim((string)($_GET['q']??''))!==''||isset($_GET['sort'])||($catSlug!==''&&!$curCat))$seo['robots']='noindex, follow';
+}elseif($page==='404')$seo['robots']='noindex, follow';
+elseif($page==='home')$seo['jsonld']=[['@type'=>'WebPage','@id'=>$base.'/#webpage','url'=>$base.'/','name'=>setting('seo_title')?:setting('site_name'),'description'=>setting('description'),'isPartOf'=>['@id'=>$base.'/#website'],'about'=>['@id'=>$base.'/#org']]];
+elseif($page==='about')$seo['jsonld']=[['@type'=>'AboutPage','url'=>$base.'/about','name'=>'About '.setting('site_name'),'about'=>['@id'=>$base.'/#org']]];
+headerView($pageTitle,$pageDesc,$page==='review'?'reviews':$page,$seo);
 // Splits the homepage headline so its last two words can be highlighted.
 $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); if(count($w)<4)return e($text); $tail=array_splice($w,-2); return e(implode(' ',$w)).' <span class="hl">'.e(implode(' ',$tail)).'</span>'; };
 ?>

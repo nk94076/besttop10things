@@ -95,6 +95,8 @@ function reviewCard(array $r): void { $tone=catStyle(['slug'=>$r['category_slug'
 function inlineMd(string $s): string {
  $s=e($s);
  $s=preg_replace_callback('~\[([^\]]+)\]\((https://[^\s)]+)\)~',fn($m)=>'<a href="'.e(trackUrl(html_entity_decode($m[2],ENT_QUOTES),'body',strip_tags(html_entity_decode($m[1],ENT_QUOTES)))).'" target="_blank" rel="sponsored nofollow noopener">'.$m[1].'</a>',$s);
+ // Links to other pages on this site: normal followed links in the same tab (no click tracking).
+ $s=preg_replace_callback('~\[([^\]]+)\]\((/[A-Za-z0-9._/#?=&;%-]*)\)~',fn($m)=>'<a href="'.$m[2].'">'.$m[1].'</a>',$s);
  return preg_replace('~\*\*(.+?)\*\*~','<strong>$1</strong>',$s);
 }
 function renderBody(string $body): string {

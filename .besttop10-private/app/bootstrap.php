@@ -17,7 +17,12 @@ CREATE TABLE IF NOT EXISTS reviews (id INTEGER PRIMARY KEY, category_id INTEGER 
 CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, password TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS login_attempts (ip TEXT PRIMARY KEY, attempts INTEGER NOT NULL, last_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS subscribers (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);');
+CREATE TABLE IF NOT EXISTS subscribers (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS links (id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS clicks (id INTEGER PRIMARY KEY, link_id INTEGER NOT NULL, post_id INTEGER, placement TEXT NOT NULL DEFAULT "", anchor TEXT NOT NULL DEFAULT "", page TEXT NOT NULL DEFAULT "", source TEXT NOT NULL DEFAULT "", referrer TEXT NOT NULL DEFAULT "", utm_source TEXT NOT NULL DEFAULT "", utm_medium TEXT NOT NULL DEFAULT "", utm_campaign TEXT NOT NULL DEFAULT "", landing TEXT NOT NULL DEFAULT "", visitor TEXT NOT NULL DEFAULT "", ip TEXT NOT NULL DEFAULT "", country TEXT NOT NULL DEFAULT "", device TEXT NOT NULL DEFAULT "", browser TEXT NOT NULL DEFAULT "", os TEXT NOT NULL DEFAULT "", user_agent TEXT NOT NULL DEFAULT "", is_bot INTEGER NOT NULL DEFAULT 0, is_admin INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS clicks_created ON clicks(created_at);
+CREATE INDEX IF NOT EXISTS clicks_post ON clicks(post_id);
+CREATE INDEX IF NOT EXISTS clicks_link ON clicks(link_id);');
 $cols=array_column($db->query('PRAGMA table_info(reviews)')->fetchAll(),'name');
 foreach(['meta_title'=>"TEXT NOT NULL DEFAULT ''",'meta_description'=>"TEXT NOT NULL DEFAULT ''",'published_at'=>'TEXT','brand'=>"TEXT NOT NULL DEFAULT ''",'brand_about'=>"TEXT NOT NULL DEFAULT ''",'cta_url'=>"TEXT NOT NULL DEFAULT ''"] as $col=>$def) if(!in_array($col,$cols,true)) $db->exec("ALTER TABLE reviews ADD COLUMN $col $def");
 if(!in_array('published_at',$cols,true)) $db->exec('UPDATE reviews SET published_at=substr(created_at,1,19)');
@@ -84,7 +89,7 @@ function reviewCard(array $r): void { $tone=catStyle(['slug'=>$r['category_slug'
 
 function inlineMd(string $s): string {
  $s=e($s);
- $s=preg_replace_callback('~\[([^\]]+)\]\((https://[^\s)]+)\)~',fn($m)=>'<a href="'.$m[2].'" target="_blank" rel="sponsored nofollow noopener">'.$m[1].'</a>',$s);
+ $s=preg_replace_callback('~\[([^\]]+)\]\((https://[^\s)]+)\)~',fn($m)=>'<a href="'.e(trackUrl(html_entity_decode($m[2],ENT_QUOTES),'body',strip_tags(html_entity_decode($m[1],ENT_QUOTES)))).'" target="_blank" rel="sponsored nofollow noopener">'.$m[1].'</a>',$s);
  return preg_replace('~\*\*(.+?)\*\*~','<strong>$1</strong>',$s);
 }
 function renderBody(string $body): string {
@@ -106,3 +111,54 @@ function siteMenu(): array {
  return [['label'=>'Reviews','url'=>'/reviews','type'=>'categories'],['label'=>'Top 10 Lists','url'=>'/top-10','type'=>'link'],['label'=>'Categories','url'=>'/categories','type'=>'link'],['label'=>'How We Review','url'=>'/about#how','type'=>'link'],['label'=>'About','url'=>'/about','type'=>'link']];
 }
 function safeMenuUrl(string $url): bool { return (bool)preg_match('~^(/(?!/)[^\s]*|https://[^\s]+)$~',$url); }
+
+// ---------- Click tracking ----------
+// Post whose links are being rendered; trackUrl() records it on every outgoing link.
+function trackPost(?int $id=null): int { static $post=0; if($id!==null)$post=$id; return $post; }
+// Turns an external https URL into a /go/<id> tracking link. Only URLs stored in the
+// links table can be redirected to, so /go/ cannot be used as an open redirect.
+function trackUrl(string $url, string $placement, string $anchor=''): string {
+ static $ids=[];
+ if(!preg_match('~^https://\S+$~i',$url))return $url;
+ if(!isset($ids[$url])){
+  run('INSERT OR IGNORE INTO links(url,created_at) VALUES (?,?)',[$url,date('c')]);
+  $ids[$url]=(int)query('SELECT id FROM links WHERE url=?',[$url])[0]['id'];
+ }
+ $q=['s'=>$placement];
+ if(trackPost())$q['p']=trackPost();
+ if($anchor!=='')$q['a']=mb_substr($anchor,0,80);
+ return '/go/'.$ids[$url].'?'.http_build_query($q);
+}
+// Remembers each visitor (long-lived random id) and where their visit came from.
+function captureVisit(): void {
+ if(empty($_COOKIE['btv'])||!preg_match('/^[a-f0-9]{16}$/',$_COOKIE['btv'])){
+  $_COOKIE['btv']=bin2hex(random_bytes(8));
+  setcookie('btv',$_COOKIE['btv'],['expires'=>time()+63072000,'path'=>'/','httponly'=>true,'samesite'=>'Lax','secure'=>!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off']);
+ }
+ if(!empty($_SESSION['visit']))return;
+ $ref=(string)($_SERVER['HTTP_REFERER']??'');$host=strtolower((string)parse_url($ref,PHP_URL_HOST));$own=strtolower((string)($_SERVER['HTTP_HOST']??''));
+ if($host===$own||$host==='www.'.$own||'www.'.$host===$own){$ref='';$host='';}
+ $utm=[];foreach(['utm_source','utm_medium','utm_campaign'] as $k)$utm[$k]=mb_substr(trim((string)($_GET[$k]??'')),0,100);
+ $_SESSION['visit']=['referrer'=>mb_substr($ref,0,500),'source'=>$utm['utm_source']?:trafficSource($host),'landing'=>mb_substr((string)($_SERVER['REQUEST_URI']??'/'),0,300)]+$utm;
+}
+// Friendly name for the site a visitor came from.
+function trafficSource(string $host): string {
+ if($host==='')return 'Direct';
+ foreach(['google'=>'Google','bing'=>'Bing','yahoo'=>'Yahoo','duckduckgo'=>'DuckDuckGo','facebook'=>'Facebook','fb.'=>'Facebook','instagram'=>'Instagram','t.co'=>'X (Twitter)','twitter'=>'X (Twitter)','x.com'=>'X (Twitter)','pinterest'=>'Pinterest','linkedin'=>'LinkedIn','lnkd'=>'LinkedIn','reddit'=>'Reddit','youtube'=>'YouTube','whatsapp'=>'WhatsApp','telegram'=>'Telegram','chatgpt'=>'ChatGPT','perplexity'=>'Perplexity'] as $needle=>$name)if(str_contains($host,$needle))return $name;
+ return preg_replace('/^www\./','',$host);
+}
+function parseAgent(string $ua): array {
+ $bot=(bool)preg_match('/bot|crawl|spider|slurp|facebookexternalhit|preview|monitor|curl|wget|python|headless|lighthouse|httpclient|java\//i',$ua)||$ua==='';
+ $device=preg_match('/ipad|tablet|kindle|silk|(android(?!.*mobile))/i',$ua)?'Tablet':(preg_match('/mobi|iphone|ipod|android|blackberry|opera mini|iemobile/i',$ua)?'Mobile':'Desktop');
+ $browser=match(true){(bool)preg_match('/edg\//i',$ua)=>'Edge',(bool)preg_match('/opr\/|opera/i',$ua)=>'Opera',(bool)preg_match('/samsungbrowser/i',$ua)=>'Samsung Internet',(bool)preg_match('/firefox|fxios/i',$ua)=>'Firefox',(bool)preg_match('/chrome|crios/i',$ua)=>'Chrome',(bool)preg_match('/safari/i',$ua)=>'Safari',default=>'Other'};
+ $os=match(true){(bool)preg_match('/windows/i',$ua)=>'Windows',(bool)preg_match('/iphone|ipad|ipod/i',$ua)=>'iOS',(bool)preg_match('/android/i',$ua)=>'Android',(bool)preg_match('/mac os x|macintosh/i',$ua)=>'macOS',(bool)preg_match('/cros/i',$ua)=>'ChromeOS',(bool)preg_match('/linux/i',$ua)=>'Linux',default=>'Other'};
+ return ['device'=>$bot?'Bot':$device,'browser'=>$browser,'os'=>$os,'is_bot'=>$bot?1:0];
+}
+// Visitor IP; behind the local Varnish/nginx proxy the real address is in X-Forwarded-For.
+function clientIp(): string {
+ $ip=(string)($_SERVER['REMOTE_ADDR']??'');
+ if(!filter_var($ip,FILTER_VALIDATE_IP,FILTER_FLAG_NO_PRIV_RANGE|FILTER_FLAG_NO_RES_RANGE)){
+  foreach(['HTTP_CF_CONNECTING_IP','HTTP_X_REAL_IP','HTTP_X_FORWARDED_FOR'] as $h){$c=trim(explode(',',(string)($_SERVER[$h]??''))[0]);if(filter_var($c,FILTER_VALIDATE_IP))return $c;}
+ }
+ return $ip;
+}

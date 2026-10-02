@@ -324,8 +324,8 @@ body.cms{background:var(--navy)}
 [data-theme=dark]{--navy:#0b1620;--navy-2:#08111a}
 
 /* ---------- Panel page (Posts) ---------- */
-.panel{background:var(--surface);border-radius:18px;box-shadow:0 2px 12px -4px rgba(15,31,42,.1);padding:0 24px 20px;overflow:hidden}
-.panel-head{margin:0 -24px 18px;padding:18px 24px;background:linear-gradient(180deg,#f3f7fa,#fff);border-bottom:1px solid var(--line);align-items:center}
+.panel{background:var(--surface);border-radius:18px;box-shadow:0 2px 12px -4px rgba(15,31,42,.1);padding:0 24px 24px;margin-bottom:20px}
+.panel-head{margin:0 -24px 22px;padding:18px 24px;border-radius:18px 18px 0 0;background:linear-gradient(180deg,#f3f7fa,#fff);border-bottom:1px solid var(--line);align-items:center}
 [data-theme=dark] .panel-head{background:#121d27}
 .head-with-icon{display:flex;align-items:center;gap:16px}
 .head-icon{display:grid;place-items:center;width:50px;height:50px;border-radius:14px;background:var(--brand-50);color:#0b7a7c;box-shadow:0 4px 12px -4px rgba(10,138,140,.35)}
@@ -389,3 +389,25 @@ body.cms{background:var(--navy)}
  .field-icon .input,.field-search .input{min-width:0;width:100%}
  .field-icon{flex:1 1 100%}
 }
+
+/* ---------- Panel pages (all screens) ---------- */
+.head-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.panel .box{box-shadow:none;border-color:var(--line)}
+.panel .box-title{font-size:17px}
+.panel .dash>.box{background:var(--surface)}
+.panel .date-chip{box-shadow:none}
+.panel .editor-side .box,.panel .editor-main>.box{background:var(--surface)}
+.panel .toolbar{top:var(--top-h)}
+.cat-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;flex:none}
+.cat-icon .icon{width:20px;height:20px}
+.title-cell .inline-form .input{font-weight:500;min-width:180px}
+.row-buttons{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.icon-danger{display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:8px;background:none;color:var(--muted);cursor:pointer}
+.icon-danger:hover{background:var(--danger-50);color:var(--danger)}
+.icon-danger .icon{width:17px;height:17px}
+.avatar-letter{width:42px;height:42px;font-weight:700;font-size:16px;background:linear-gradient(135deg,#1aa3a5,#14324a);color:#fff}
+.user-name{color:var(--ink);font-weight:600}
+.panel .media-item{box-shadow:none}
+.panel .upload-box{background:#f8fafb}
+[data-theme=dark] .panel .upload-box{background:#121d27}
+.panel .list-table code{background:var(--bg)}

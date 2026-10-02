@@ -38,6 +38,9 @@ function aicon(string $name, string $class='icon'): string {
  static $p=['home'=>'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" fill="currentColor" stroke="none"/>','file'=>'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>','image'=>'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>','folder'=>'<path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>','users'=>'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>','gear'=>'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>','chart'=>'<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>','pen'=>'<path d="M4 20h16M14.5 4.5l3 3L8 17H5v-3z"/>','clock'=>'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>','trash'=>'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>','send'=>'<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>','calendar'=>'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>','right'=>'<path d="m9 6 6 6-6 6"/>','down'=>'<path d="m6 9 6 6 6-6"/>','plus'=>'<path d="M12 5v14M5 12h14"/>','search'=>'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>','sun'=>'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>','user'=>'<circle cx="12" cy="8" r="4" fill="currentColor" stroke="none"/><path d="M4 21a8 8 0 0 1 16 0z" fill="currentColor" stroke="none"/>','logout'=>'<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11"/>','menu'=>'<path d="M3 6h18M3 12h18M3 18h18"/>','crown'=>'<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" fill="currentColor" stroke="none"/>'];
  return '<svg class="'.e($class).'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'.($p[$name]??$p['file']).'</svg>';
 }
+function pageHead(string $icon, string $title, string $sub, string $actions=''): string {
+ return '<div class="page-head panel-head"><div class="head-with-icon"><span class="head-icon">'.aicon($icon).'</span><div><h1 class="page-title">'.e($title).'</h1><p class="page-sub">'.e($sub).'</p></div></div>'.($actions?'<div class="head-actions">'.$actions.'</div>':'').'</div>';
+}
 function imageInUse(string $url): bool { return (bool)query('SELECT id FROM reviews WHERE image=? OR instr(body,?)>0 LIMIT 1',[$url,$url]); }
 function savePost(array $in, int $id): int {
  $title=trim((string)($in['title']??''));
@@ -221,7 +224,7 @@ if(!isset($titles[$view]))$view='dashboard';
 <?php if(isset($_SESSION['flash'])): ?><p role="status" class="notice notice-success"><?= e($_SESSION['flash']) ?></p><?php unset($_SESSION['flash']);endif ?>
 
 <?php if($view==='dashboard'): ?>
- <div class="page-head"><div><h1 class="page-title">Dashboard</h1><p class="page-sub">Welcome back! Here's what's happening with your site.</p></div><span class="date-chip"><?= aicon('calendar') ?> <?= e(date('M j, Y')) ?></span></div>
+ <section class="panel"><?= pageHead('home','Dashboard',"Welcome back! Here's what's happening with your site.",'<span class="date-chip">'.aicon('calendar').' '.e(date('M j, Y')).'</span>') ?>
  <div class="dash">
   <section class="box dash-glance"><h2 class="box-title"><?= aicon('chart','icon title-icon') ?> At a Glance</h2><div class="glance">
    <?php foreach([['Published',$counts['published'],'posts&status=published','file','teal'],['Drafts',$counts['draft'],'posts&status=draft','file','blue'],['Scheduled',$counts['scheduled'],'posts&status=scheduled','clock','violet'],['Categories',(int)db()->query('SELECT COUNT(*) FROM categories')->fetchColumn(),'categories','folder','amber'],['Media files',count(mediaFiles()),'media','image','rose'],['In Trash',$counts['trash'],'posts&status=trash','trash','green']] as [$label,$n,$link,$ic,$tone]): ?>
@@ -239,7 +242,7 @@ if(!isset($titles[$view]))$view='dashboard';
    <?php foreach($drafts=query("SELECT id,title,updated_at FROM reviews WHERE status='draft' ORDER BY updated_at DESC LIMIT 6") as $r): ?>
     <li><span class="muted"><?= e(date('M j',strtotime($r['updated_at']))) ?></span><a href="/admin.php?view=edit&id=<?= $r['id'] ?>"><?= e($r['title']) ?></a></li>
    <?php endforeach ?><?php if(!$drafts): ?><li class="muted">No drafts.</li><?php endif ?></ul></section>
- </div>
+ </div></section>
 <?php elseif($view==='posts'):
  $status=(string)($_GET['status']??'all');if(!isset($counts[$status]))$status='all';
  $s=trim((string)($_GET['s']??''));$cat=(int)($_GET['cat']??0);$page=max(1,(int)($_GET['p']??1));
@@ -256,7 +259,8 @@ if(!isset($titles[$view]))$view='dashboard';
  $chip=fn(int $id)=>['teal','violet','green','rose','amber','blue'][$id%6];
 ?>
  <section class="panel">
- <div class="page-head panel-head"><div class="head-with-icon"><span class="head-icon"><?= aicon('file') ?></span><div><h1 class="page-title">Posts</h1><p class="page-sub">Manage and organize your content. Create, edit, and publish posts.</p></div></div><a class="button button-primary button-lg" href="/admin.php?view=edit"><?= aicon('plus') ?> Add New Post</a></div>
+ <?= pageHead('file','Posts','Manage and organize your content. Create, edit, and publish posts.','<a class="button button-primary button-lg" href="/admin.php?view=edit">'.aicon('plus').' Add New Post</a>') ?>
+
  <ul class="seg"><?php foreach(['all'=>'All','published'=>'Published','scheduled'=>'Scheduled','draft'=>'Drafts','trash'=>'Trash'] as $k=>$label): if($k!=='all'&&!$counts[$k])continue; ?><li><a class="<?= $status===$k?'current':'' ?>" href="<?= e($q(['status'=>$k==='all'?null:$k,'p'=>null])) ?>"><?php if($k!=='all'): ?><i class="dot dot-<?= $k ?>"></i><?php endif ?><?= $label ?> (<?= $counts[$k] ?>)</a></li><?php endforeach ?></ul>
  <form class="tablenav" method="get"><input type="hidden" name="view" value="posts"><?php if($status!=='all'): ?><input type="hidden" name="status" value="<?= e($status) ?>"><?php endif ?>
   <label class="field-icon"><?= aicon('folder') ?><select class="input" name="cat" aria-label="Filter by category"><option value="">All Categories</option><?php foreach(categories() as $c): ?><option value="<?= $c['id'] ?>" <?= $cat===(int)$c['id']?'selected':'' ?>><?= e($c['name']) ?></option><?php endforeach ?></select></label>
@@ -299,7 +303,7 @@ if(!isset($titles[$view]))$view='dashboard';
  $r=$id?(query('SELECT * FROM reviews WHERE id=?',[$id])[0]??null):['id'=>0,'title'=>'','slug'=>'','category_id'=>'','excerpt'=>'','body'=>'','image'=>'','score'=>'0','pros'=>'','cons'=>'','verdict'=>'','author'=>'Editorial team','status'=>'draft','featured'=>0,'demo'=>0,'meta_title'=>'','meta_description'=>'','published_at'=>''];
  if($r&&$error&&($_POST['action']??'')==='save_post')$r=array_merge($r,array_intersect_key($_POST,$r),['featured'=>isset($_POST['featured']),'demo'=>isset($_POST['demo'])]);
  if(!$r): ?><p class="notice notice-error">Post not found.</p><?php else: $state=$id?postState($r):'new'; ?>
- <div class="page-head"><h1 class="page-title"><?= $id?'Edit Post':'Add New Post' ?></h1><?php if($id): ?><a class="button" href="/admin.php?view=edit">Add New</a><?php endif ?></div>
+ <section class="panel"><?= pageHead('pen',$id?'Edit Post':'Add New Post',$id?'Update the content, settings and SEO of this post.':'Write something new. Save it as a draft or publish when ready.',$id?'<a class="button button-outline" href="/admin.php?view=posts">'.aicon('file').' All Posts</a><a class="button button-primary" href="/admin.php?view=edit">'.aicon('plus').' Add New</a>':'<a class="button button-outline" href="/admin.php?view=posts">'.aicon('file').' All Posts</a>') ?>
  <form method="post" enctype="multipart/form-data" class="editor" data-editor data-now="<?= e(substr(now(),0,16)) ?>"><?= csrfField() ?><input type="hidden" name="action" value="save_post"><input type="hidden" name="id" value="<?= e($r['id']) ?>">
   <div class="editor-main">
    <input class="input title-input" name="title" value="<?= e($r['title']) ?>" placeholder="Add title" required maxlength="200" aria-label="Title" data-title>
@@ -314,19 +318,19 @@ if(!isset($titles[$view]))$view='dashboard';
     <div class="prose-preview hidden" data-preview></div>
     <div class="editor-foot muted"><span data-wordcount>0 words</span><span>## heading · **bold** · [text](https://url) · - list · ![alt](/uploads/image.jpg)</span></div>
    </div>
-   <section class="box"><h2 class="box-title">Excerpt</h2><textarea class="input" name="excerpt" rows="3" maxlength="600"><?= e($r['excerpt']) ?></textarea><p class="hint">Short summary shown on cards and in search results. Leave empty to generate it from the content.</p></section>
-   <details class="box" <?= $r['score']>0||$r['pros']!==''?'open':'' ?>><summary class="box-title">Review Details <span class="muted">(optional — for product reviews)</span></summary><div class="stack">
+   <section class="box"><h2 class="box-title"><?= aicon('file','icon title-icon') ?> Excerpt</h2><textarea class="input" name="excerpt" rows="3" maxlength="600"><?= e($r['excerpt']) ?></textarea><p class="hint">Short summary shown on cards and in search results. Leave empty to generate it from the content.</p></section>
+   <details class="box" <?= $r['score']>0||$r['pros']!==''?'open':'' ?>><summary class="box-title"><?= aicon('chart','icon title-icon') ?> Review Details <span class="muted">(optional — for product reviews)</span></summary><div class="stack">
     <label>Score out of 10 <input class="input input-sm" name="score" type="number" min="0" max="10" step="0.1" value="<?= e($r['score']) ?>"></label><p class="hint">Leave at 0 for a regular article: no rating badge or verdict box is shown.</p>
     <label>Pros (one per line)<textarea class="input" name="pros" rows="3"><?= e($r['pros']) ?></textarea></label>
     <label>Cons (one per line)<textarea class="input" name="cons" rows="3"><?= e($r['cons']) ?></textarea></label>
     <label>Final verdict<textarea class="input" name="verdict" rows="3"><?= e($r['verdict']) ?></textarea></label></div></details>
-   <section class="box"><h2 class="box-title">SEO</h2><div class="stack">
+   <section class="box"><h2 class="box-title"><?= aicon('search','icon title-icon') ?> SEO</h2><div class="stack">
     <label>SEO title <span class="muted" data-count-for="meta_title"></span><input class="input" name="meta_title" value="<?= e($r['meta_title']) ?>" maxlength="200" placeholder="<?= e($r['title']?:'Defaults to the post title') ?>" data-count="60"></label>
     <label>Meta description <span class="muted" data-count-for="meta_description"></span><textarea class="input" name="meta_description" rows="2" maxlength="500" placeholder="Defaults to the excerpt" data-count="160"><?= e($r['meta_description']) ?></textarea></label>
     <div class="serp"><p class="serp-title" data-serp-title><?= e($r['meta_title']?:$r['title']?:'Post title') ?></p><p class="serp-url"><?= e($_SERVER['HTTP_HOST']??'') ?> › <?= e($r['slug']?:'post') ?></p><p class="serp-desc" data-serp-desc><?= e($r['meta_description']?:$r['excerpt']) ?></p></div></div></section>
   </div>
   <aside class="editor-side">
-   <section class="box"><h2 class="box-title">Publish</h2>
+   <section class="box"><h2 class="box-title"><?= aicon('send','icon title-icon') ?> Publish</h2>
     <p>Status: <b><?= ['new'=>'Not saved','published'=>'Published','scheduled'=>'Scheduled','draft'=>'Draft','trash'=>'In Trash'][$state] ?></b></p>
     <label>Publish date <input class="input input-sm" type="datetime-local" name="published_at" value="<?= e(substr((string)$r['published_at'],0,16)) ?>" data-pubdate></label>
     <p class="hint">Leave empty to publish now. A future date schedules the post.</p>
@@ -338,23 +342,24 @@ if(!isset($titles[$view]))$view='dashboard';
     </div>
     <?php if($id&&$state!=='trash'): ?><button class="link-danger" form="trash-post">Move to Trash</button><?php endif ?>
    </section>
-   <section class="box"><h2 class="box-title">Category</h2><div class="cat-list"><?php foreach(categories() as $c): ?><label class="check-row"><input type="radio" name="category_id" value="<?= $c['id'] ?>" <?= (int)$r['category_id']===(int)$c['id']?'checked':'' ?> required> <?= e($c['name']) ?></label><?php endforeach ?></div><a class="hint" href="/admin.php?view=categories">+ Add New Category</a></section>
-   <section class="box"><h2 class="box-title">Featured Image</h2>
+   <section class="box"><h2 class="box-title"><?= aicon('folder','icon title-icon') ?> Category</h2><div class="cat-list"><?php foreach(categories() as $c): ?><label class="check-row"><input type="radio" name="category_id" value="<?= $c['id'] ?>" <?= (int)$r['category_id']===(int)$c['id']?'checked':'' ?> required> <?= e($c['name']) ?></label><?php endforeach ?></div><a class="hint" href="/admin.php?view=categories">+ Add New Category</a></section>
+   <section class="box"><h2 class="box-title"><?= aicon('image','icon title-icon') ?> Featured Image</h2>
     <?php if($r['image']): ?><img class="feat-preview" src="<?= e($r['image']) ?>" alt="Current featured image" data-feat-preview><?php else: ?><img class="feat-preview hidden" alt="" data-feat-preview><?php endif ?>
     <label>Upload new<input class="input input-sm" type="file" name="image_upload" accept="image/jpeg,image/png,image/webp"></label>
     <details class="library"><summary>Choose from Media Library</summary><div class="library-grid"><?php foreach(libraryImages() as $img): ?><label><input type="radio" name="image_pick" value="<?= e($img) ?>" <?= $img===$r['image']?'checked':'' ?>><img src="<?= e($img) ?>" alt="" loading="lazy"></label><?php endforeach ?></div></details>
     <label>Or image URL<input class="input input-sm" name="image" value="<?= e($r['image']) ?>" placeholder="https://… or /uploads/…" data-image-url></label>
    </section>
-   <section class="box"><h2 class="box-title">Author</h2><input class="input input-sm" name="author" value="<?= e($r['author']) ?>" aria-label="Author"></section>
+   <section class="box"><h2 class="box-title"><?= aicon('user','icon title-icon') ?> Author</h2><input class="input input-sm" name="author" value="<?= e($r['author']) ?>" aria-label="Author"></section>
   </aside>
  </form>
  <?php if($id): ?><form id="trash-post" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="post_status"><input type="hidden" name="do" value="trash"><input type="hidden" name="id" value="<?= $id ?>"><input type="hidden" name="return" value="/admin.php?view=posts"></form><?php endif ?>
+ </section>
  <?php endif ?>
 
 <?php elseif($view==='media'): $files=mediaFiles(); ?>
- <div class="page-head"><div><h1 class="page-title">Media Library</h1><p class="page-sub">Upload and manage the images used across your site.</p></div></div>
+ <section class="panel"><?= pageHead('image','Media Library','Upload and manage the images used across your site.','<span class="muted">'.count($files).' file'.(count($files)===1?'':'s').'</span>') ?>
  <form method="post" enctype="multipart/form-data" class="box upload-box"><?= csrfField() ?><input type="hidden" name="action" value="upload_media">
-  <p><b>Upload images</b> <span class="muted">JPG, PNG or WebP, up to 5 MB each.</span></p><input class="input" type="file" name="files[]" accept="image/jpeg,image/png,image/webp" multiple required><button class="button button-primary">Upload</button></form>
+  <p><b>Upload images</b> <span class="muted">JPG, PNG or WebP, up to 5 MB each.</span></p><input class="input" type="file" name="files[]" accept="image/jpeg,image/png,image/webp" multiple required><button class="button button-primary"><?= aicon('plus') ?> Upload</button></form>
  <div class="media-grid">
   <?php foreach($files as $f): $used=imageInUse($f['url']); ?>
    <figure class="media-item"><a href="<?= e($f['url']) ?>" target="_blank"><img src="<?= e($f['url']) ?>" alt="" loading="lazy"></a>
@@ -363,48 +368,50 @@ if(!isset($titles[$view]))$view='dashboard';
   <?php endforeach ?>
   <?php if(!$files): ?><p class="muted">No uploads yet.</p><?php endif ?>
  </div>
- <p class="hint">Click an image URL to copy it, then paste it into a post as <code>![description](/uploads/…)</code>.</p>
+ <p class="hint">Click an image URL to copy it, then paste it into a post as <code>![description](/uploads/…)</code>.</p></section>
 
 <?php elseif($view==='categories'): ?>
- <div class="page-head"><div><h1 class="page-title">Categories</h1><p class="page-sub">Organise posts into topics readers can browse.</p></div></div>
+ <section class="panel"><?= pageHead('folder','Categories','Organise posts into topics readers can browse.') ?>
  <div class="two-col">
-  <form method="post" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="save_category"><h2 class="box-title">Add New Category</h2>
+  <form method="post" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="save_category"><h2 class="box-title"><?= aicon('plus','icon title-icon') ?> Add New Category</h2>
    <label>Name<input class="input" name="name" required maxlength="60" placeholder="e.g. Automotive"></label>
    <label>Icon<select class="input" name="icon"><?php foreach(['grid','tech','shopping','travel','gadgets','home'] as $i): ?><option><?= $i ?></option><?php endforeach ?></select></label>
-   <div><button class="button button-primary">Add New Category</button></div></form>
-  <div class="table-wrap"><table class="list-table"><thead><tr><th>Name</th><th>Icon</th><th>Slug</th><th>Count</th><th></th></tr></thead><tbody>
+   <div><button class="button button-primary"><?= aicon('plus') ?> Add New Category</button></div></form>
+  <div class="table-wrap"><table class="list-table"><thead><tr><th>Name</th><th>Icon</th><th>Slug</th><th>Posts</th><th class="kebab-col"><span class="sr-only">Actions</span></th></tr></thead><tbody>
    <?php foreach(categories() as $c): ?><tr>
-    <td><form method="post" class="inline-form" id="cat-<?= $c['id'] ?>"><?= csrfField() ?><input type="hidden" name="action" value="save_category"><input type="hidden" name="id" value="<?= $c['id'] ?>"><input class="input input-sm" name="name" value="<?= e($c['name']) ?>" required aria-label="Category name"></form></td>
+    <td><div class="title-cell"><span class="cat-icon chip-<?= ['teal','violet','green','rose','amber','blue'][(int)$c['id']%6] ?>"><?= aicon('folder') ?></span><form method="post" class="inline-form" id="cat-<?= $c['id'] ?>"><?= csrfField() ?><input type="hidden" name="action" value="save_category"><input type="hidden" name="id" value="<?= $c['id'] ?>"><input class="input input-sm" name="name" value="<?= e($c['name']) ?>" required aria-label="Category name"></form></div></td>
     <td><select class="input input-sm" name="icon" form="cat-<?= $c['id'] ?>" aria-label="Icon"><?php foreach(['grid','tech','shopping','travel','gadgets','home'] as $i): ?><option <?= $c['icon']===$i?'selected':'' ?>><?= $i ?></option><?php endforeach ?></select></td>
-    <td class="muted"><?= e($c['slug']) ?></td><td><a href="/admin.php?view=posts&cat=<?= $c['id'] ?>"><?= (int)$c['total'] ?></a></td>
-    <td class="nowrap"><button class="button button-sm" form="cat-<?= $c['id'] ?>">Save</button> <form method="post" class="inline-form" data-confirm="Delete this category?"><?= csrfField() ?><input type="hidden" name="action" value="delete_category"><input type="hidden" name="id" value="<?= $c['id'] ?>"><button class="link-danger">Delete</button></form></td></tr>
+    <td class="muted"><code><?= e($c['slug']) ?></code></td><td><a class="chip chip-<?= ['teal','violet','green','rose','amber','blue'][(int)$c['id']%6] ?>" href="/admin.php?view=posts&cat=<?= $c['id'] ?>"><?= (int)$c['total'] ?> post<?= (int)$c['total']===1?'':'s' ?></a></td>
+    <td class="nowrap"><div class="row-buttons"><button class="button button-outline button-sm" form="cat-<?= $c['id'] ?>">Save</button><form method="post" class="inline-form" data-confirm="Delete this category?"><?= csrfField() ?><input type="hidden" name="action" value="delete_category"><input type="hidden" name="id" value="<?= $c['id'] ?>"><button class="icon-danger" title="Delete category" aria-label="Delete <?= e($c['name']) ?>"><?= aicon('trash') ?></button></form></div></td></tr>
    <?php endforeach ?></tbody></table></div>
- </div>
+ </div></section>
 
 <?php elseif($view==='users'): ?>
- <div class="page-head"><div><h1 class="page-title">Users</h1><p class="page-sub">People who can sign in to this workspace.</p></div></div>
+ <section class="panel"><?= pageHead('users','Users','People who can sign in to this workspace.') ?>
  <div class="two-col">
   <div class="stack">
-   <form method="post" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="add_user"><h2 class="box-title">Add New User</h2>
+   <form method="post" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="add_user"><h2 class="box-title"><?= aicon('users','icon title-icon') ?> Add New User</h2>
     <label>Email<input class="input" type="email" name="email" required autocomplete="off"></label>
     <label>Password<input class="input" type="password" name="password" minlength="12" required autocomplete="new-password"></label><p class="hint">At least 12 characters. Every user has full access to the CMS.</p>
-    <div><button class="button button-primary">Add New User</button></div></form>
-   <form method="post" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="password"><h2 class="box-title">Change Your Password</h2>
+    <div><button class="button button-primary"><?= aicon('plus') ?> Add New User</button></div></form>
+   <form method="post" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="password"><h2 class="box-title"><?= aicon('gear','icon title-icon') ?> Change Your Password</h2>
     <label>Current password<input class="input" type="password" name="current_password" autocomplete="current-password" required></label>
     <label>New password<input class="input" type="password" name="new_password" autocomplete="new-password" minlength="12" required></label>
-    <div><button class="button">Update Password</button></div></form>
+    <div><button class="button button-outline">Update Password</button></div></form>
   </div>
-  <div class="table-wrap"><table class="list-table"><thead><tr><th>Email</th><th></th></tr></thead><tbody>
-   <?php foreach(query('SELECT id,email FROM admins ORDER BY id') as $u): ?><tr><td><?= e($u['email']) ?><?= (int)$u['id']===(int)$me['id']?' <span class="tag">You</span>':'' ?></td>
-    <td><?php if((int)$u['id']!==(int)$me['id']): ?><form method="post" data-confirm="Delete this user?"><?= csrfField() ?><input type="hidden" name="action" value="delete_user"><input type="hidden" name="id" value="<?= $u['id'] ?>"><button class="link-danger">Delete</button></form><?php endif ?></td></tr><?php endforeach ?>
+  <div class="table-wrap"><table class="list-table"><thead><tr><th>User</th><th>Role</th><th class="kebab-col"><span class="sr-only">Actions</span></th></tr></thead><tbody>
+   <?php foreach(query('SELECT id,email FROM admins ORDER BY id') as $u): ?><tr><td><div class="title-cell"><span class="avatar avatar-letter"><?= e(strtoupper($u['email'][0])) ?></span><div><b class="user-name"><?= e(ucfirst(explode('@',$u['email'])[0])) ?></b><?= (int)$u['id']===(int)$me['id']?' <span class="tag">You</span>':'' ?><br><span class="muted"><?= e($u['email']) ?></span></div></div></td>
+    <td><span class="chip chip-teal">Administrator</span></td>
+    <td class="kebab-col"><?php if((int)$u['id']!==(int)$me['id']): ?><form method="post" data-confirm="Delete this user?"><?= csrfField() ?><input type="hidden" name="action" value="delete_user"><input type="hidden" name="id" value="<?= $u['id'] ?>"><button class="icon-danger" title="Delete user" aria-label="Delete <?= e($u['email']) ?>"><?= aicon('trash') ?></button></form><?php endif ?></td></tr><?php endforeach ?>
   </tbody></table></div>
- </div>
+ </div></section>
 
 <?php elseif($view==='settings'): ?>
- <div class="page-head"><div><h1 class="page-title">Settings</h1><p class="page-sub">Your site title, homepage headline and description.</p></div></div>
- <form method="post" class="box stack narrow"><?= csrfField() ?><input type="hidden" name="action" value="settings">
+ <section class="panel"><?= pageHead('gear','Settings','Your site title, homepage headline and description.') ?>
+ <form method="post" class="box stack narrow"><?= csrfField() ?><input type="hidden" name="action" value="settings"><h2 class="box-title"><?= aicon('home','icon title-icon') ?> General</h2>
   <?php foreach(['site_name'=>'Site Title','tagline'=>'Homepage headline','description'=>'Homepage description (also the default meta description)'] as $key=>$label): ?><label><?= $label ?><textarea class="input" name="<?= $key ?>" rows="2" required maxlength="500"><?= e(setting($key)) ?></textarea></label><?php endforeach ?>
-  <div><button class="button button-primary">Save Changes</button></div></form>
+  <div><button class="button button-primary"><?= aicon('send') ?> Save Changes</button></div></form>
+ </section>
 <?php endif ?>
 </main>
 <?php endif ?>

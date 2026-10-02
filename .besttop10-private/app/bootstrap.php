@@ -17,6 +17,9 @@ CREATE TABLE IF NOT EXISTS reviews (id INTEGER PRIMARY KEY, category_id INTEGER 
 CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, password TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS login_attempts (ip TEXT PRIMARY KEY, attempts INTEGER NOT NULL, last_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);');
+$cols=array_column($db->query('PRAGMA table_info(reviews)')->fetchAll(),'name');
+foreach(['meta_title'=>"TEXT NOT NULL DEFAULT ''",'meta_description'=>"TEXT NOT NULL DEFAULT ''",'published_at'=>'TEXT'] as $col=>$def) if(!in_array($col,$cols,true)) $db->exec("ALTER TABLE reviews ADD COLUMN $col $def");
+if(!in_array('published_at',$cols,true)) $db->exec('UPDATE reviews SET published_at=substr(created_at,1,19)');
 if (!$db->query("SELECT COUNT(*) FROM settings WHERE key='initialized'")->fetchColumn()) require __DIR__ . '/seed.php';
 function db(): PDO { global $db; return $db; }
 function e(mixed $s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
@@ -28,7 +31,10 @@ function csrf(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(32))
 function csrfField(): string { return '<input type="hidden" name="csrf" value="'.e(csrf()).'">'; }
 function checkCsrf(): void { if (!hash_equals(csrf(), (string)($_POST['csrf'] ?? ''))) { http_response_code(403); exit('Invalid request. Reload the page and try again.'); } }
 function redirect(string $url): never { header('Location: '.$url, true, 303); exit; }
-function categories(): array { return query('SELECT c.*, COUNT(r.id) AS total FROM categories c LEFT JOIN reviews r ON r.category_id=c.id AND r.status="published" GROUP BY c.id ORDER BY c.id'); }
+function now(): string { return date('Y-m-d\TH:i:s'); }
+// SQL condition for posts visible on the public site: published and not scheduled for later.
+function live(): string { return "r.status='published' AND (r.published_at IS NULL OR r.published_at<='".now()."')"; }
+function categories(): array { return query('SELECT c.*, COUNT(r.id) AS total FROM categories c LEFT JOIN reviews r ON r.category_id=c.id AND '.live().' GROUP BY c.id ORDER BY c.id'); }
 function reviewUrl(array $r): string { return '/?page=review&slug='.rawurlencode($r['slug']); }
 function safeImage(string $url): bool { return (bool)preg_match('~^https://[^\s]+$~i', $url) || (bool)preg_match('~^/assets/[a-zA-Z0-9_./-]+\.(jpg|jpeg|png|webp|svg)$~', $url) || (bool)preg_match('~^/uploads/[a-f0-9]{32}\.(jpg|png|webp)$~', $url); }
 function icon(string $name, string $class='h-5 w-5'): string {
@@ -49,6 +55,7 @@ function renderBody(string $body): string {
  foreach(preg_split('/\R\s*\R/',trim($body)) as $block){
   $lines=preg_split('/\R/',trim($block));
   if(preg_match('/^(#{2,4})\s+(.+)$/',$lines[0],$m)){$tag=strlen($m[1])===2?'h2':'h3';$html.='<'.$tag.' class="mb-4 mt-8 text-2xl">'.inlineMd($m[2]).'</'.$tag.'>';array_shift($lines);if(!$lines)continue;}
+  if(count($lines)===1&&preg_match('/^!\[([^\]]*)\]\(([^)\s]+)\)$/',$lines[0],$m)&&safeImage($m[2])){$html.='<figure><img src="'.e($m[2]).'" alt="'.e($m[1]).'" loading="lazy"></figure>';continue;}
   if(!array_filter($lines,fn($l)=>!preg_match('/^\s*[-*]\s+/',$l))){$html.='<ul>';foreach($lines as $l)$html.='<li>'.inlineMd(preg_replace('/^\s*[-*]\s+/','',$l)).'</li>';$html.='</ul>';continue;}
   $html.='<p>'.implode('<br>',array_map('inlineMd',$lines)).'</p>';
  }

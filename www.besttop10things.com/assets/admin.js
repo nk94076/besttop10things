@@ -126,6 +126,66 @@ if (editor) {
   ['input', 'change'].forEach(type => editor.addEventListener(type, updateSeo));
   updateSeo();
 
+  // Live SEO and AI-readiness checks (Yoast/Rank Math style)
+  const renderChecks = (list, scoreEl, checks) => {
+    list.replaceChildren(...checks.map(([state, text]) => {
+      const li = document.createElement('li');
+      li.className = state; li.textContent = text; return li;
+    }));
+    const pts = checks.reduce((n, [state]) => n + (state === 'pass' ? 1 : state === 'warn' ? 0.5 : 0), 0);
+    const pct = Math.round(pts / checks.length * 100);
+    scoreEl.textContent = `${pct}/100`;
+    scoreEl.className = 'seo-score ' + (pct >= 75 ? 'good' : pct >= 50 ? 'ok' : 'bad');
+  };
+  const analyse = () => {
+    const text = body.value, lower = text.toLowerCase();
+    const plain = text.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[#*>`_-]/g, ' ');
+    const words = plain.trim() ? plain.trim().split(/\s+/) : [];
+    const h2s = [...text.matchAll(/^##\s+(.+)$/gm)].map(m => m[1].toLowerCase());
+    const seoTitle = (editor.meta_title.value || title.value).trim();
+    const desc = (editor.meta_description.value || editor.excerpt.value).trim();
+    const kw = editor.focus_keyword.value.trim().toLowerCase();
+    const has = s => kw !== '' && s.toLowerCase().includes(kw);
+    const firstPara = words.slice(0, 120).join(' ').toLowerCase();
+    const kwCount = kw ? lower.split(kw).length - 1 : 0;
+    const density = words.length ? kwCount * kw.split(/\s+/).length / words.length * 100 : 0;
+    const links = [...text.matchAll(/\]\(([^)]+)\)/g)].map(m => m[1]);
+    const seo = [];
+    seo.push(kw ? ['pass', `Focus keyword set: "${kw}"`] : ['fail', 'Add a focus keyword.']);
+    if (kw) {
+      seo.push(has(seoTitle) ? ['pass', 'Keyword appears in the SEO title.'] : ['fail', 'Use the keyword in the SEO title.']);
+      seo.push(has(desc) ? ['pass', 'Keyword appears in the meta description.'] : ['fail', 'Use the keyword in the meta description.']);
+      seo.push(slug.value.includes(kw.replace(/[^a-z0-9]+/g, '-')) ? ['pass', 'Keyword appears in the URL.'] : ['warn', 'Consider putting the keyword in the permalink.']);
+      seo.push(firstPara.includes(kw) ? ['pass', 'Keyword appears in the introduction.'] : ['fail', 'Use the keyword in the first paragraph.']);
+      seo.push(h2s.some(h => h.includes(kw)) ? ['pass', 'Keyword appears in a subheading.'] : ['warn', 'Use the keyword in at least one ## subheading.']);
+      seo.push(density >= 0.5 && density <= 2.5 ? ['pass', `Keyword density ${density.toFixed(1)}% (good).`] : ['warn', `Keyword density ${density.toFixed(1)}% (aim for 0.5–2.5%).`]);
+    }
+    seo.push(seoTitle.length >= 30 && seoTitle.length <= 60 ? ['pass', `SEO title length ${seoTitle.length} (good).`] : ['warn', `SEO title is ${seoTitle.length} characters (aim for 30–60).`]);
+    seo.push(desc.length >= 120 && desc.length <= 160 ? ['pass', `Meta description length ${desc.length} (good).`] : ['warn', `Meta description is ${desc.length} characters (aim for 120–160).`]);
+    seo.push(words.length >= 600 ? ['pass', `${words.length} words.`] : ['warn', `${words.length} words; 600+ usually ranks better.`]);
+    seo.push(h2s.length >= 3 ? ['pass', `${h2s.length} subheadings.`] : ['warn', 'Break the article into at least 3 ## sections.']);
+    seo.push(links.some(u => u.startsWith('/')) ? ['pass', 'Has internal links.'] : ['warn', 'Link to at least one other article on this site (/slug).']);
+    seo.push(links.some(u => u.startsWith('https://')) ? ['pass', 'Has outbound links.'] : ['warn', 'Add a link to a useful outside source.']);
+    renderChecks(editor.querySelector('[data-seo-checks]'), editor.querySelector('[data-seo-score]'), seo);
+
+    const tldr = editor.tldr.value.trim();
+    const takeaways = editor.takeaways.value.split('\n').filter(l => l.trim()).length;
+    const faq = /^##\s+(faqs?|frequently asked questions)/im.test(text) ? (text.split(/^##\s+(?:faqs?|frequently asked questions).*$/im)[1] || '').split(/^##\s/m)[0].match(/^\*\*.+\?\*\*\s*$/gm) || [] : [];
+    const ai = [];
+    ai.push(tldr.length >= 40 && tldr.length <= 320 ? ['pass', 'Quick answer present: AI tools can quote it directly.'] : tldr ? ['warn', 'Keep the quick answer to 1–3 sentences (40–320 characters).'] : ['fail', 'Add a quick answer / TL;DR.']);
+    ai.push(takeaways >= 3 ? ['pass', `${takeaways} key takeaways.`] : ['warn', 'Add 3–5 key takeaways.']);
+    ai.push(faq.length >= 3 ? ['pass', `FAQ section with ${faq.length} questions (FAQ schema added).`] : ['warn', 'Add a "## Frequently Asked Questions" section with 3+ **Question?** lines.']);
+    ai.push(h2s.some(h => h.trim().endsWith('?') || /^(what|how|why|which|when|is|are|can|do|does|should)\b/.test(h)) ? ['pass', 'Uses question-style headings people (and AI) search for.'] : ['warn', 'Phrase some headings as questions ("How do I…?").']);
+    ai.push(/^\s*(-|\d+\.)\s/m.test(text) ? ['pass', 'Uses lists that are easy to extract.'] : ['warn', 'Add a bulleted or numbered list.']);
+    ai.push((plain.match(/\b\d[\d.,%]*\b/g) || []).length >= 3 ? ['pass', 'Includes specific numbers or facts.'] : ['warn', 'Add concrete numbers, prices, sizes or dates; AI answers favour specifics.']);
+    ai.push(!h2s.length || words.length / h2s.length <= 350 ? ['pass', 'Sections are short and focused.'] : ['warn', 'Sections are long; add more ## subheadings (≈ every 300 words).']);
+    ai.push(kw && firstPara.includes(kw) && words.length && /[.!?]/.test(words.slice(0, 60).join(' ')) ? ['pass', 'Opens with a direct answer.'] : ['warn', 'Answer the main question in the first 2–3 sentences.']);
+    renderChecks(editor.querySelector('[data-ai-checks]'), editor.querySelector('[data-ai-score]'), ai);
+  };
+  let analyseTimer;
+  ['input', 'change'].forEach(type => editor.addEventListener(type, () => { clearTimeout(analyseTimer); analyseTimer = setTimeout(analyse, 250); }));
+  analyse();
+
   // "Schedule" label for future dates
   const pubdate = editor.querySelector('[data-pubdate]');
   const publishBtn = editor.querySelector('[data-publish-btn]');

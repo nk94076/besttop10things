@@ -24,9 +24,14 @@ CREATE INDEX IF NOT EXISTS clicks_created ON clicks(created_at);
 CREATE INDEX IF NOT EXISTS clicks_post ON clicks(post_id);
 CREATE INDEX IF NOT EXISTS clicks_link ON clicks(link_id);');
 $cols=array_column($db->query('PRAGMA table_info(reviews)')->fetchAll(),'name');
-foreach(['meta_title'=>"TEXT NOT NULL DEFAULT ''",'meta_description'=>"TEXT NOT NULL DEFAULT ''",'published_at'=>'TEXT','brand'=>"TEXT NOT NULL DEFAULT ''",'brand_about'=>"TEXT NOT NULL DEFAULT ''",'cta_url'=>"TEXT NOT NULL DEFAULT ''"] as $col=>$def) if(!in_array($col,$cols,true)) $db->exec("ALTER TABLE reviews ADD COLUMN $col $def");
+foreach(['meta_title'=>"TEXT NOT NULL DEFAULT ''",'meta_description'=>"TEXT NOT NULL DEFAULT ''",'published_at'=>'TEXT','brand'=>"TEXT NOT NULL DEFAULT ''",'brand_about'=>"TEXT NOT NULL DEFAULT ''",'cta_url'=>"TEXT NOT NULL DEFAULT ''",'focus_keyword'=>"TEXT NOT NULL DEFAULT ''",'seo_canonical'=>"TEXT NOT NULL DEFAULT ''",'seo_robots'=>"TEXT NOT NULL DEFAULT ''",'og_image'=>"TEXT NOT NULL DEFAULT ''",'schema_type'=>"TEXT NOT NULL DEFAULT ''",'tldr'=>"TEXT NOT NULL DEFAULT ''",'takeaways'=>"TEXT NOT NULL DEFAULT ''",'custom_schema'=>"TEXT NOT NULL DEFAULT ''"] as $col=>$def) if(!in_array($col,$cols,true)) $db->exec("ALTER TABLE reviews ADD COLUMN $col $def");
 if(!in_array('published_at',$cols,true)) $db->exec('UPDATE reviews SET published_at=substr(created_at,1,19)');
 if (!$db->query("SELECT COUNT(*) FROM settings WHERE key='initialized'")->fetchColumn()) require __DIR__ . '/seed.php';
+// One-time: Google Search Console ownership code (fills an empty field once; editable later in SEO & Code).
+if(!$db->query("SELECT COUNT(*) FROM settings WHERE key='gsc_seeded'")->fetchColumn()){
+ $db->exec("INSERT INTO settings(key,value) VALUES ('google_verification','fDeKGDOwF1hrnkonBq0riuFh5KjaZh2AnYTabK8vZRM') ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE settings.value=''");
+ $db->exec("INSERT OR IGNORE INTO settings(key,value) VALUES ('gsc_seeded','1')");
+}
 function db(): PDO { global $db; return $db; }
 function e(mixed $s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function query(string $sql, array $params=[]): array { $q=db()->prepare($sql); $q->execute($params); return $q->fetchAll(); }
@@ -199,4 +204,22 @@ function indexNowPing(array $urls): bool {
  curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_HTTPHEADER=>['Content-Type: application/json; charset=utf-8'],CURLOPT_POSTFIELDS=>json_encode(['host'=>$host,'key'=>$key,'keyLocation'=>siteBase().'/'.$key.'.txt','urlList'=>array_slice($urls,0,10000)]),CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>4,CURLOPT_CONNECTTIMEOUT=>3]);
  curl_exec($ch);$code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
  return $code>=200&&$code<300;
+}
+
+// Schema.org types an editor may pick for a post.
+const SCHEMA_TYPES=['BlogPosting'=>'Blog post (default)','Article'=>'Article','NewsArticle'=>'News article','HowTo'=>'How-to guide','Review'=>'Product review (uses the score)'];
+// Custom header/body/footer code from the admin. Its <script> tags get a per-request nonce, so they run while
+// the CSP still blocks any other inline script; external hosts must be listed in "Allowed script domains".
+function cspNonce(): string { static $n=null; return $n??=base64_encode(random_bytes(16)); }
+function customCode(string $key): string {
+ $code=setting($key);if(trim($code)==='')return '';
+ return preg_replace('/<script\b(?![^>]*\bnonce=)/i','<script nonce="'.cspNonce().'"',$code);
+}
+function codeDomains(): array {
+ return array_values(array_filter(array_map(fn($d)=>strtolower(trim($d)),preg_split('/[\s,]+/',setting('code_domains'))),fn($d)=>preg_match('/^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)+$/',$d)));
+}
+function sendCustomCodeCsp(): void {
+ if(trim(setting('code_head').setting('code_body').setting('code_footer'))==='')return;
+ $hosts=implode(' ',array_map(fn($d)=>'https://'.$d,codeDomains()));
+ header("Content-Security-Policy: default-src 'self'; img-src 'self' https: data:; style-src 'self' $hosts; script-src 'self' 'nonce-".cspNonce()."' https://www.googletagmanager.com $hosts; connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com $hosts; frame-src $hosts https://www.googletagmanager.com; form-action 'self'; base-uri 'self'; frame-ancestors 'none'");
 }

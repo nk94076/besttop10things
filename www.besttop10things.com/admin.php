@@ -35,7 +35,7 @@ function libraryImages(): array {
  return $images;
 }
 function aicon(string $name, string $class='icon'): string {
- static $p=['home'=>'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" fill="currentColor" stroke="none"/>','file'=>'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>','image'=>'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>','folder'=>'<path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>','users'=>'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>','gear'=>'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>','chart'=>'<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>','pen'=>'<path d="M4 20h16M14.5 4.5l3 3L8 17H5v-3z"/>','clock'=>'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>','trash'=>'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>','send'=>'<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>','calendar'=>'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>','right'=>'<path d="m9 6 6 6-6 6"/>','down'=>'<path d="m6 9 6 6 6-6"/>','plus'=>'<path d="M12 5v14M5 12h14"/>','search'=>'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>','sun'=>'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>','user'=>'<circle cx="12" cy="8" r="4" fill="currentColor" stroke="none"/><path d="M4 21a8 8 0 0 1 16 0z" fill="currentColor" stroke="none"/>','logout'=>'<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11"/>','menu'=>'<path d="M3 6h18M3 12h18M3 18h18"/>','crown'=>'<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" fill="currentColor" stroke="none"/>'];
+ static $p=['code'=>'<path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>','home'=>'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" fill="currentColor" stroke="none"/>','file'=>'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>','image'=>'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>','folder'=>'<path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>','users'=>'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>','gear'=>'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>','chart'=>'<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>','pen'=>'<path d="M4 20h16M14.5 4.5l3 3L8 17H5v-3z"/>','clock'=>'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>','trash'=>'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>','send'=>'<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>','calendar'=>'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>','right'=>'<path d="m9 6 6 6-6 6"/>','down'=>'<path d="m6 9 6 6 6-6"/>','plus'=>'<path d="M12 5v14M5 12h14"/>','search'=>'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>','sun'=>'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>','user'=>'<circle cx="12" cy="8" r="4" fill="currentColor" stroke="none"/><path d="M4 21a8 8 0 0 1 16 0z" fill="currentColor" stroke="none"/>','logout'=>'<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11"/>','menu'=>'<path d="M3 6h18M3 12h18M3 18h18"/>','crown'=>'<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" fill="currentColor" stroke="none"/>'];
  return '<svg class="'.e($class).'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'.($p[$name]??$p['file']).'</svg>';
 }
 function pageHead(string $icon, string $title, string $sub, string $actions=''): string {
@@ -79,13 +79,21 @@ function savePost(array $in, int $id): int {
  $brand=[trim((string)($in['brand']??'')),trim((string)($in['brand_about']??'')),trim((string)($in['cta_url']??''))];
  if($brand[2]!==''&&!preg_match('~^https://\S+$~i',$brand[2]))throw new RuntimeException('The brand link must start with https://.');
  if(strlen($brand[0])>80||strlen($brand[1])>500)throw new RuntimeException('Brand name or description is too long.');
- $values=[$category,$title,$slug,trim((string)($in['excerpt']??''))?:autoExcerpt($body),$body,$image,$score,trim((string)($in['pros']??'')),trim((string)($in['cons']??'')),trim((string)($in['verdict']??'')),trim((string)($in['author']??''))?:'Editorial team',$status,empty($in['featured'])?0:1,empty($in['demo'])?0:1,$meta[0],$meta[1],...$brand,$publishedAt,date('c')];
- $cols='category_id=?,title=?,slug=?,excerpt=?,body=?,image=?,score=?,pros=?,cons=?,verdict=?,author=?,status=?,featured=?,demo=?,meta_title=?,meta_description=?,brand=?,brand_about=?,cta_url=?,published_at=?,updated_at=?';
+ $adv=[trim((string)($in['focus_keyword']??'')),trim((string)($in['seo_canonical']??'')),(string)($in['seo_robots']??''),trim((string)($in['og_image']??'')),(string)($in['schema_type']??''),trim((string)($in['tldr']??'')),trim(str_replace("\r",'',(string)($in['takeaways']??''))),trim((string)($in['custom_schema']??''))];
+ if(strlen($adv[0])>100)throw new RuntimeException('Focus keyword is too long (100 characters max).');
+ if($adv[1]!==''&&!preg_match('~^https://\S+$~i',$adv[1]))throw new RuntimeException('The canonical URL must be a full https:// address.');
+ if(!in_array($adv[2],['','noindex, follow','index, nofollow','noindex, nofollow'],true))$adv[2]='';
+ if($adv[3]!==''&&!safeImage($adv[3]))throw new RuntimeException('The social share image must be an HTTPS URL or an image from the media library.');
+ if(!array_key_exists($adv[4],SCHEMA_TYPES))$adv[4]='';
+ if(strlen($adv[5])>700||strlen($adv[6])>2000)throw new RuntimeException('The quick answer or key takeaways are too long.');
+ if($adv[7]!==''&&(strlen($adv[7])>20000||!is_array(json_decode($adv[7],true))))throw new RuntimeException('Custom schema must be valid JSON-LD (a JSON object), e.g. {"@type":"Product",…}.');
+ $values=[$category,$title,$slug,trim((string)($in['excerpt']??''))?:autoExcerpt($body),$body,$image,$score,trim((string)($in['pros']??'')),trim((string)($in['cons']??'')),trim((string)($in['verdict']??'')),trim((string)($in['author']??''))?:'Editorial team',$status,empty($in['featured'])?0:1,empty($in['demo'])?0:1,$meta[0],$meta[1],...$brand,...$adv,$publishedAt,date('c')];
+ $cols='category_id=?,title=?,slug=?,excerpt=?,body=?,image=?,score=?,pros=?,cons=?,verdict=?,author=?,status=?,featured=?,demo=?,meta_title=?,meta_description=?,brand=?,brand_about=?,cta_url=?,focus_keyword=?,seo_canonical=?,seo_robots=?,og_image=?,schema_type=?,tldr=?,takeaways=?,custom_schema=?,published_at=?,updated_at=?';
  if($id){
   if(!query('SELECT id FROM reviews WHERE id=?',[$id]))throw new RuntimeException('Post not found.');
   run("UPDATE reviews SET $cols WHERE id=?",[...$values,$id]);return $id;
  }
- run('INSERT INTO reviews(category_id,title,slug,excerpt,body,image,score,pros,cons,verdict,author,status,featured,demo,meta_title,meta_description,brand,brand_about,cta_url,published_at,updated_at,created_at) VALUES ('.implode(',',array_fill(0,22,'?')).')',[...$values,date('c')]);
+ run('INSERT INTO reviews(category_id,title,slug,excerpt,body,image,score,pros,cons,verdict,author,status,featured,demo,meta_title,meta_description,brand,brand_about,cta_url,focus_keyword,seo_canonical,seo_robots,og_image,schema_type,tldr,takeaways,custom_schema,published_at,updated_at,created_at) VALUES ('.implode(',',array_fill(0,30,'?')).')',[...$values,date('c')]);
  return (int)db()->lastInsertId();
 }
 
@@ -130,16 +138,16 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    $in=implode(',',array_fill(0,count($ids),'?'));
    $map=['publish'=>"status='published'",'draft'=>"status='draft'",'trash'=>"status='trash'",'restore'=>"status='draft'"];
    if(isset($map[$do]))run("UPDATE reviews SET {$map[$do]},updated_at=? WHERE id IN ($in)",[date('c'),...$ids]);
-   if($do==='publish')indexNowPing(array_map('reviewUrl',query("SELECT slug FROM reviews r WHERE id IN ($in) AND ".live(),$ids)));
    elseif($do==='delete')run("DELETE FROM reviews WHERE status='trash' AND id IN ($in)",$ids);
    else throw new RuntimeException('Choose a bulk action.');
+   if($do==='publish')indexNowPing(array_map('reviewUrl',query("SELECT slug FROM reviews r WHERE id IN ($in) AND ".live(),$ids)));
    $n=count($ids);$labels=['publish'=>'published','draft'=>'moved to drafts','trash'=>'moved to the Trash','restore'=>'restored from the Trash','delete'=>'permanently deleted'];
    flash("$n post".($n>1?'s':'')." {$labels[$do]}.",backTo('/admin.php?view=posts'));
   }
   if($action==='duplicate'){
    $r=query('SELECT * FROM reviews WHERE id=?',[(int)($_POST['id']??0)])[0]??null;if(!$r)throw new RuntimeException('Post not found.');
    $base=$r['slug'].'-copy';$slug=$base;for($i=2;query('SELECT id FROM reviews WHERE slug=?',[$slug]);$i++)$slug="$base-$i";
-   $id=savePost(['title'=>$r['title'].' (copy)','slug'=>$slug,'status'=>'draft','featured'=>0,'published_at'=>'']+$r,0);
+   $id=savePost(['title'=>$r['title'].' (copy)','slug'=>$slug,'status'=>'draft','featured'=>0,'published_at'=>'','seo_canonical'=>'']+$r,0);
    flash('Post duplicated as a draft.','/admin.php?view=edit&id='.$id);
   }
 
@@ -205,8 +213,24 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    if(!$menu)throw new RuntimeException('Add at least one menu item.');
    if(count($menu)>10)throw new RuntimeException('Use at most 10 menu items.');
    $save('menu',json_encode($menu,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
-   foreach(['seo_title'=>200,'meta_keywords'=>500,'google_verification'=>200,'bing_verification'=>200,'ga_id'=>30] as $k=>$max){$v=trim((string)($_POST[$k]??''));if(strlen($v)>$max)throw new RuntimeException('An SEO field is too long.');if($k==='ga_id'&&$v!==''&&!preg_match('/^G-[A-Z0-9]{4,20}$/',$v))throw new RuntimeException('The Google Analytics ID looks like G-XXXXXXXXXX.');$save($k,$v);}
+   foreach(['seo_title'=>200,'meta_keywords'=>500,] as $k=>$max){$v=trim((string)($_POST[$k]??''));if(strlen($v)>$max)throw new RuntimeException('An SEO field is too long.');$save($k,$v);}
    flash('Appearance saved.','/admin.php?view=appearance');
+  }
+  if($action==='seo_settings'){
+   $vals=[];
+   foreach(['google_verification'=>200,'bing_verification'=>200,'yandex_verification'=>200,'pinterest_verification'=>200,'ga_id'=>30,'org_about'=>600,'org_email'=>200,'org_same_as'=>2000,'llms_intro'=>1500,'code_head'=>20000,'code_body'=>20000,'code_footer'=>20000,'code_domains'=>1000] as $k=>$max){$v=trim(str_replace("\r",'',(string)($_POST[$k]??'')));if(strlen($v)>$max)throw new RuntimeException('A field is too long.');$vals[$k]=$v;}
+   foreach(['google_verification','bing_verification','yandex_verification','pinterest_verification'] as $k){if(preg_match('/content=["\']([^"\']+)["\']/i',$vals[$k],$m))$vals[$k]=$m[1];if($vals[$k]!==''&&!preg_match('/^[A-Za-z0-9_\-=.:]{4,200}$/',$vals[$k]))throw new RuntimeException('Paste only the verification code (the content="…" value).');}
+   if($vals['ga_id']!==''&&!preg_match('/^G-[A-Z0-9]{4,20}$/',$vals['ga_id']))throw new RuntimeException('The Google Analytics ID looks like G-XXXXXXXXXX.');
+   if($vals['org_email']!==''&&!filter_var($vals['org_email'],FILTER_VALIDATE_EMAIL))throw new RuntimeException('Enter a valid contact email.');
+   foreach(array_filter(explode("\n",$vals['org_same_as']),'trim') as $u)if(!preg_match('~^https://\S+$~',trim($u)))throw new RuntimeException('Social profile links must each start with https://.');
+   $vals['ai_search']=($_POST['ai_search']??'')==='allow'?'allow':'block';$vals['ai_training']=($_POST['ai_training']??'')==='allow'?'allow':'block';
+   foreach($vals as $k=>$v)run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,$v]);
+   flash('SEO settings saved.','/admin.php?view=seo');
+  }
+  if($action==='indexnow_all'){
+   $urls=['/','/reviews','/top-10','/categories'];foreach(categories() as $c)if($c['total'])$urls[]='/category/'.rawurlencode($c['slug']);
+   foreach(query('SELECT r.slug FROM reviews r WHERE '.live()) as $x)$urls[]=reviewUrl($x);
+   flash(indexNowPing($urls)?count($urls).' URLs sent to IndexNow (Bing, ChatGPT search, Yandex…).':'IndexNow did not accept the request. Try again later.','/admin.php?view=seo');
   }
   if($action==='tracking'){
    $param=trim((string)($_POST['subid_param']??''));
@@ -234,7 +258,7 @@ if($me&&$view==='clicks'&&isset($_GET['export'])){
  exit;
 }
 if($logged&&!$me){unset($_SESSION['admin']);$logged=false;}
-$titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','clicks'=>'Clicks','appearance'=>'Appearance','users'=>'Users','settings'=>'Settings'];
+$titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','clicks'=>'Clicks','appearance'=>'Appearance','seo'=>'SEO & Code','users'=>'Users','settings'=>'Settings'];
 if(!isset($titles[$view]))$view='dashboard';
 ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($logged?$titles[$view]:'Log in') ?> ‹ <?= e(setting('site_name')) ?></title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/admin.css"><script src="/assets/admin.js" defer></script></head>
 <body class="<?= $logged?'cms':'cms-login' ?>">
@@ -258,7 +282,7 @@ if(!isset($titles[$view]))$view='dashboard';
  $now=now();
  $count=fn(string $where)=>(int)db()->query("SELECT COUNT(*) FROM reviews r WHERE $where")->fetchColumn();
  $counts=['all'=>$count("r.status!='trash'"),'published'=>$count(live()),'scheduled'=>$count("r.status='published' AND r.published_at>'$now'"),'draft'=>$count("r.status='draft'"),'trash'=>$count("r.status='trash'")];
- $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'clicks'=>['Clicks','chart'],'appearance'=>['Appearance','image'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
+ $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'clicks'=>['Clicks','chart'],'appearance'=>['Appearance','image'],'seo'=>['SEO &amp; Code','code'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
 ?>
 <header class="cms-top">
  <button type="button" class="cms-menu" data-side-toggle aria-label="Toggle menu"><?= aicon('menu') ?></button>
@@ -362,7 +386,7 @@ if(!isset($titles[$view]))$view='dashboard';
 
 <?php elseif($view==='edit'):
  $id=(int)($_GET['id']??0);
- $r=$id?(query('SELECT * FROM reviews WHERE id=?',[$id])[0]??null):['id'=>0,'title'=>'','slug'=>'','category_id'=>'','excerpt'=>'','body'=>'','image'=>'','score'=>'0','pros'=>'','cons'=>'','verdict'=>'','author'=>'Editorial team','status'=>'draft','featured'=>0,'demo'=>0,'meta_title'=>'','meta_description'=>'','brand'=>'','brand_about'=>'','cta_url'=>'','published_at'=>''];
+ $r=$id?(query('SELECT * FROM reviews WHERE id=?',[$id])[0]??null):['id'=>0,'title'=>'','slug'=>'','category_id'=>'','excerpt'=>'','body'=>'','image'=>'','score'=>'0','pros'=>'','cons'=>'','verdict'=>'','author'=>'Editorial team','status'=>'draft','featured'=>0,'demo'=>0,'meta_title'=>'','meta_description'=>'','brand'=>'','brand_about'=>'','cta_url'=>'','focus_keyword'=>'','seo_canonical'=>'','seo_robots'=>'','og_image'=>'','schema_type'=>'','tldr'=>'','takeaways'=>'','custom_schema'=>'','published_at'=>''];
  if($r&&$error&&($_POST['action']??'')==='save_post')$r=array_merge($r,array_intersect_key($_POST,$r),['featured'=>isset($_POST['featured']),'demo'=>isset($_POST['demo'])]);
  if(!$r): ?><p class="notice notice-error">Post not found.</p><?php else: $state=$id?postState($r):'new'; ?>
  <section class="panel"><?= pageHead('pen',$id?'Edit Post':'Add New Post',$id?'Update the content, settings and SEO of this post.':'Write something new. Save it as a draft or publish when ready.',$id?'<a class="button button-outline" href="/admin.php?view=posts">'.aicon('file').' All Posts</a><a class="button button-primary" href="/admin.php?view=edit">'.aicon('plus').' Add New</a>':'<a class="button button-outline" href="/admin.php?view=posts">'.aicon('file').' All Posts</a>') ?>
@@ -394,7 +418,22 @@ if(!isset($titles[$view]))$view='dashboard';
    <section class="box"><h2 class="box-title"><?= aicon('search','icon title-icon') ?> SEO</h2><div class="stack">
     <label>SEO title <span class="muted" data-count-for="meta_title"></span><input class="input" name="meta_title" value="<?= e($r['meta_title']) ?>" maxlength="200" placeholder="<?= e($r['title']?:'Defaults to the post title') ?>" data-count="60"></label>
     <label>Meta description <span class="muted" data-count-for="meta_description"></span><textarea class="input" name="meta_description" rows="2" maxlength="500" placeholder="Defaults to the excerpt" data-count="160"><?= e($r['meta_description']) ?></textarea></label>
-    <div class="serp"><p class="serp-title" data-serp-title><?= e($r['meta_title']?:$r['title']?:'Post title') ?></p><p class="serp-url"><?= e($_SERVER['HTTP_HOST']??'') ?> › <?= e($r['slug']?:'post') ?></p><p class="serp-desc" data-serp-desc><?= e($r['meta_description']?:$r['excerpt']) ?></p></div></div></section>
+    <div class="serp"><p class="serp-title" data-serp-title><?= e($r['meta_title']?:$r['title']?:'Post title') ?></p><p class="serp-url"><?= e($_SERVER['HTTP_HOST']??'') ?> › <?= e($r['slug']?:'post') ?></p><p class="serp-desc" data-serp-desc><?= e($r['meta_description']?:$r['excerpt']) ?></p></div>
+    <label>Focus keyword <span class="muted">(the main search phrase this post should rank for)</span><input class="input" name="focus_keyword" value="<?= e($r['focus_keyword']) ?>" maxlength="100" placeholder="e.g. best sports hats" data-focus></label>
+    <div class="seo-checks"><p class="lbl">SEO analysis <b class="seo-score" data-seo-score></b></p><ul class="check-list" data-seo-checks></ul></div></div></section>
+   <section class="box"><h2 class="box-title"><?= aicon('chart','icon title-icon') ?> AI SEO <span class="muted">(AEO · GEO · LLMO — ChatGPT, Gemini, Perplexity, Google AI Overviews)</span></h2><div class="stack">
+    <label>Quick answer / TL;DR <span class="muted" data-count-for="tldr"></span><textarea class="input" name="tldr" rows="3" maxlength="700" data-count="300" placeholder="Answer the main question of this post in 1–3 plain sentences. AI assistants quote this directly."><?= e($r['tldr']) ?></textarea></label>
+    <label>Key takeaways <span class="muted">(one per line, 3–5 short facts)</span><textarea class="input" name="takeaways" rows="4" maxlength="2000" placeholder="Structured caps look sharper; relaxed caps suit casual days&#10;Match one colour from the hat in your outfit"><?= e($r['takeaways']) ?></textarea></label>
+    <p class="hint">Shown as a "Quick answer" box at the top of the post, added to the schema (abstract + speakable) and to <code>/llms.txt</code>. Add a <code>## Frequently Asked Questions</code> section with <code>**Question?**</code> lines to get FAQ schema automatically.</p>
+    <div class="seo-checks"><p class="lbl">AI readiness <b class="seo-score" data-ai-score></b></p><ul class="check-list" data-ai-checks></ul></div></div></section>
+   <details class="box" <?= $r['seo_canonical'].$r['seo_robots'].$r['og_image'].$r['schema_type'].$r['custom_schema']!==''?'open':'' ?>><summary class="box-title"><?= aicon('gear','icon title-icon') ?> Advanced SEO</summary><div class="stack">
+    <label>Schema type<select class="input" name="schema_type"><?php foreach(SCHEMA_TYPES as $k=>$label): ?><option value="<?= $k==='BlogPosting'?'':e($k) ?>" <?= ($r['schema_type']?:'BlogPosting')===$k?'selected':'' ?>><?= e($label) ?></option><?php endforeach ?></select></label>
+    <p class="hint">"How-to guide" turns each <code>##</code> heading into a step. "Product review" needs a score and a brand name.</p>
+    <label>Search engine visibility<select class="input" name="seo_robots"><?php foreach([''=>'Index & follow links (recommended)','noindex, follow'=>'Hide from search (noindex)','index, nofollow'=>'Index, but don\'t follow links','noindex, nofollow'=>'Hide and don\'t follow links'] as $k=>$label): ?><option value="<?= e($k) ?>" <?= $r['seo_robots']===$k?'selected':'' ?>><?= e($label) ?></option><?php endforeach ?></select></label>
+    <label>Canonical URL <span class="muted">(only if this content first appeared elsewhere)</span><input class="input" name="seo_canonical" value="<?= e($r['seo_canonical']) ?>" placeholder="https://… (leave empty for this page)"></label>
+    <label>Social share image <span class="muted">(1200×630 JPG/PNG recommended)</span><input class="input" name="og_image" value="<?= e($r['og_image']) ?>" placeholder="Defaults to the featured image"></label>
+    <label>Custom schema (JSON-LD) <span class="muted">(optional, added to the page)</span><textarea class="input code-input" name="custom_schema" rows="4" spellcheck="false" placeholder='{"@type":"Product","name":"…","brand":{"@type":"Brand","name":"…"}}'><?= e($r['custom_schema']) ?></textarea></label>
+   </div></details>
   </div>
   <aside class="editor-side">
    <section class="box"><h2 class="box-title"><?= aicon('send','icon title-icon') ?> Publish</h2>
@@ -491,10 +530,7 @@ if(!isset($titles[$view]))$view='dashboard';
      <label><span class="lbl">Homepage title <span class="muted" data-count-for="seo_title"></span></span><input class="input" name="seo_title" value="<?= e(setting('seo_title')) ?>" maxlength="200" placeholder="<?= e(setting('site_name')) ?>" data-count="60"></label>
      <p class="hint">The default meta description is the homepage description in <a href="/admin.php?view=settings">Settings</a>. Each post has its own SEO title and description in the editor.</p>
      <label><span class="lbl">Keywords <span class="muted">(comma separated)</span></span><textarea class="input" name="meta_keywords" rows="2" maxlength="500" placeholder="best products, reviews, top 10 lists, buying guides"><?= e(setting('meta_keywords')) ?></textarea></label>
-     <label>Google Search Console verification code<input class="input" name="google_verification" value="<?= e(setting('google_verification')) ?>" maxlength="200" placeholder="Only the content value, e.g. abc123…"></label>
-     <label>Bing Webmaster Tools verification code <span class="muted">(msvalidate.01)</span><input class="input" name="bing_verification" value="<?= e(setting('bing_verification')) ?>" maxlength="200" placeholder="Only the content value"></label>
-     <label>Google Analytics measurement ID<input class="input" name="ga_id" value="<?= e(setting('ga_id','G-Z6E5E0V0Q3')) ?>" maxlength="30" placeholder="G-XXXXXXXXXX"></label>
-     <p class="hint">Search engines and AI assistants are pinged automatically (IndexNow) when you publish. Sitemap: <code>/sitemap.xml</code> · AI summary: <code>/llms.txt</code></p>
+     <p class="hint">Verification codes, Google Analytics, custom header/footer code and AI SEO settings are in <a href="/admin.php?view=seo">SEO &amp; Code</a>.</p>
     </div></section>
    </div>
   </div>
@@ -592,6 +628,48 @@ if(!isset($titles[$view]))$view='dashboard';
   </tbody></table></div>
  </div></section>
 
+<?php elseif($view==='seo'): $f=fn($k,$d='')=>e($error&&($_POST['action']??'')==='seo_settings'?($_POST[$k]??''):setting($k,$d)); $base=siteBase(); ?>
+ <section class="panel"><?= pageHead('code','SEO & Code','Search engine verification, analytics, AI search settings and custom code for every page.') ?>
+ <form method="post" class="settings-form"><?= csrfField() ?><input type="hidden" name="action" value="seo_settings">
+  <div class="grid-2">
+   <section class="box"><h2 class="box-title"><?= aicon('check','icon title-icon') ?> Site verification</h2><div class="stack">
+    <label>Google Search Console<input class="input" name="google_verification" value="<?= $f('google_verification') ?>" maxlength="200" placeholder="content value, or paste the whole meta tag"></label>
+    <label>Bing Webmaster Tools <span class="muted">(also powers ChatGPT search)</span><input class="input" name="bing_verification" value="<?= $f('bing_verification') ?>" maxlength="200"></label>
+    <label>Yandex<input class="input" name="yandex_verification" value="<?= $f('yandex_verification') ?>" maxlength="200"></label>
+    <label>Pinterest<input class="input" name="pinterest_verification" value="<?= $f('pinterest_verification') ?>" maxlength="200"></label>
+    <label>Google Analytics 4 measurement ID<input class="input" name="ga_id" value="<?= $f('ga_id','G-Z6E5E0V0Q3') ?>" maxlength="30" placeholder="G-XXXXXXXXXX"></label>
+    <p class="hint">Analytics is not loaded while you are signed in to the admin, so your own visits are not counted.</p>
+   </div></section>
+   <section class="box"><h2 class="box-title"><?= aicon('chart','icon title-icon') ?> AI SEO (AEO · GEO · LLMO)</h2><div class="stack">
+    <label class="check-row"><input type="checkbox" name="ai_search" value="allow" <?= setting('ai_search','allow')==='allow'?'checked':'' ?>> Allow AI search &amp; answer engines <span class="muted">(ChatGPT search, Perplexity, Claude, DuckAssist)</span></label>
+    <label class="check-row"><input type="checkbox" name="ai_training" value="allow" <?= setting('ai_training','allow')==='allow'?'checked':'' ?>> Allow AI model crawlers <span class="muted">(GPTBot, Google-Extended/Gemini, ClaudeBot, Applebot, Meta)</span></label>
+    <p class="hint">Keep both on to appear in AI answers. Google AI Overviews use the normal Googlebot.</p>
+    <label>About the site, for AI assistants <span class="muted">(top of /llms.txt)</span><textarea class="input" name="llms_intro" rows="3" maxlength="1500" placeholder="Who you are, what you cover, how you test and choose products."><?= $f('llms_intro') ?></textarea></label>
+    <p class="hint">AI files: <a href="/llms.txt" target="_blank">/llms.txt</a> · <a href="/llms-full.txt" target="_blank">/llms-full.txt</a> · <a href="/feed.xml" target="_blank">/feed.xml</a> · <a href="/sitemap.xml" target="_blank">/sitemap.xml</a> · <a href="/robots.txt" target="_blank">/robots.txt</a></p>
+   </div></section>
+   <section class="box"><h2 class="box-title"><?= aicon('users','icon title-icon') ?> Brand entity <span class="muted">(helps Google &amp; AI recognise the site)</span></h2><div class="stack">
+    <label>Organisation description<textarea class="input" name="org_about" rows="3" maxlength="600" placeholder="Defaults to the site description"><?= $f('org_about') ?></textarea></label>
+    <label>Contact email<input class="input" name="org_email" value="<?= $f('org_email') ?>" maxlength="200" placeholder="hello@besttop10things.com"></label>
+    <label>Social profiles <span class="muted">(one https:// link per line)</span><textarea class="input" name="org_same_as" rows="4" maxlength="2000" placeholder="https://www.facebook.com/…&#10;https://www.instagram.com/…&#10;https://www.linkedin.com/company/…"><?= $f('org_same_as') ?></textarea></label>
+   </div></section>
+   <section class="box"><h2 class="box-title"><?= aicon('send','icon title-icon') ?> Fast indexing</h2><div class="stack">
+    <p>Every publish or update pings <b>IndexNow</b> automatically (Bing, ChatGPT search, Yandex, Seznam, Naver).</p>
+    <p class="hint">Key file: <a href="/<?= e(indexNowKey()) ?>.txt" target="_blank"><?= e($base) ?>/<?= e(indexNowKey()) ?>.txt</a></p>
+    <button class="button button-outline" form="indexnow-all"><?= aicon('send') ?> Submit all URLs now</button>
+    <p class="hint">For Google: submit <code><?= e($base) ?>/sitemap.xml</code> in Search Console → Sitemaps, and use URL Inspection → Request indexing for new posts.</p>
+   </div></section>
+  </div>
+  <section class="box"><h2 class="box-title"><?= aicon('code','icon title-icon') ?> Custom code</h2><div class="stack">
+   <label>Header code <span class="muted">(inside &lt;head&gt; on every page: meta tags, pixels, tag managers)</span><textarea class="input code-input" name="code_head" rows="6" spellcheck="false"><?= $f('code_head') ?></textarea></label>
+   <label>Body code <span class="muted">(right after &lt;body&gt;: e.g. Google Tag Manager noscript)</span><textarea class="input code-input" name="code_body" rows="4" spellcheck="false"><?= $f('code_body') ?></textarea></label>
+   <label>Footer code <span class="muted">(before &lt;/body&gt;: chat widgets, extra scripts)</span><textarea class="input code-input" name="code_footer" rows="4" spellcheck="false"><?= $f('code_footer') ?></textarea></label>
+   <label>Allowed script domains <span class="muted">(space or comma separated)</span><input class="input" name="code_domains" value="<?= $f('code_domains') ?>" maxlength="1000" placeholder="connect.facebook.net www.clarity.ms *.hotjar.com"></label>
+   <p class="hint">For security the site only runs scripts from its own files. Inline &lt;script&gt; code you paste here is allowed automatically; scripts or iframes loaded from another website need that website's domain listed above. Code runs on the public site only, not in the admin.</p>
+  </div></section>
+  <div class="save-bar"><button class="button button-primary button-lg"><?= aicon('send') ?> Save SEO settings</button></div>
+ </form>
+ <form id="indexnow-all" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="indexnow_all"></form>
+ </section>
 <?php elseif($view==='settings'): ?>
  <section class="panel"><?= pageHead('gear','Settings','Your site title, homepage headline and description.') ?>
  <form method="post" class="box stack narrow"><?= csrfField() ?><input type="hidden" name="action" value="settings"><h2 class="box-title"><?= aicon('home','icon title-icon') ?> General</h2>

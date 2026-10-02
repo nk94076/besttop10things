@@ -73,3 +73,28 @@ document.querySelectorAll('[data-copy-link]').forEach(button => button.addEventL
   button.classList.add('copied');
   setTimeout(() => button.classList.remove('copied'), 1500);
 }));
+
+// Full-screen search: open from the header button or with "/", close with Esc or the backdrop
+const overlay = document.querySelector('[data-search-overlay]');
+if (overlay) {
+  const input = overlay.querySelector('[data-search-input]');
+  let lastFocus = null;
+  const open = () => {
+    lastFocus = document.activeElement;
+    overlay.hidden = false;
+    document.body.classList.add('no-scroll');
+    input.focus();
+  };
+  const close = () => {
+    overlay.hidden = true;
+    document.body.classList.remove('no-scroll');
+    lastFocus?.focus();
+  };
+  document.querySelectorAll('[data-search-open]').forEach(button => button.addEventListener('click', open));
+  overlay.querySelector('[data-search-close]').addEventListener('click', close);
+  overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !overlay.hidden) close();
+    if (event.key === '/' && overlay.hidden && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { event.preventDefault(); open(); }
+  });
+}

@@ -83,3 +83,10 @@ function renderBody(string $body): string {
  }
  return $html;
 }
+// Header menu as configured in CMS → Appearance. Each item: label, url, type ("link" or "categories").
+function siteMenu(): array {
+ $menu=json_decode(setting('menu'),true);
+ if(is_array($menu)&&$menu)return $menu;
+ return [['label'=>'Reviews','url'=>'/?page=reviews','type'=>'categories'],['label'=>'Top 10 Lists','url'=>'/?page=top10','type'=>'link'],['label'=>'Categories','url'=>'/?page=categories','type'=>'link'],['label'=>'How We Review','url'=>'/?page=about#how','type'=>'link'],['label'=>'About','url'=>'/?page=about','type'=>'link']];
+}
+function safeMenuUrl(string $url): bool { return (bool)preg_match('~^(/(?!/)[^\s]*|https://[^\s]+)$~',$url); }

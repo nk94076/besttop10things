@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS clicks (id INTEGER PRIMARY KEY, link_id INTEGER NOT N
 CREATE INDEX IF NOT EXISTS clicks_created ON clicks(created_at);
 CREATE INDEX IF NOT EXISTS clicks_post ON clicks(post_id);
 CREATE INDEX IF NOT EXISTS clicks_link ON clicks(link_id);');
+$db->exec('CREATE TABLE IF NOT EXISTS social_posts (id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL, network TEXT NOT NULL, status TEXT NOT NULL, remote_id TEXT NOT NULL DEFAULT "", message TEXT NOT NULL DEFAULT "", created_at TEXT NOT NULL)');
+$db->exec('CREATE TABLE IF NOT EXISTS authors (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, slug TEXT NOT NULL UNIQUE, role TEXT NOT NULL DEFAULT "", bio TEXT NOT NULL DEFAULT "", avatar TEXT NOT NULL DEFAULT "", expertise TEXT NOT NULL DEFAULT "", links TEXT NOT NULL DEFAULT "", created_at TEXT NOT NULL)');
+if(!in_array('intro',array_column($db->query('PRAGMA table_info(categories)')->fetchAll(),'name'),true))$db->exec("ALTER TABLE categories ADD COLUMN intro TEXT NOT NULL DEFAULT ''");
 $cols=array_column($db->query('PRAGMA table_info(reviews)')->fetchAll(),'name');
 foreach(['meta_title'=>"TEXT NOT NULL DEFAULT ''",'meta_description'=>"TEXT NOT NULL DEFAULT ''",'published_at'=>'TEXT','brand'=>"TEXT NOT NULL DEFAULT ''",'brand_about'=>"TEXT NOT NULL DEFAULT ''",'cta_url'=>"TEXT NOT NULL DEFAULT ''",'focus_keyword'=>"TEXT NOT NULL DEFAULT ''",'seo_canonical'=>"TEXT NOT NULL DEFAULT ''",'seo_robots'=>"TEXT NOT NULL DEFAULT ''",'og_image'=>"TEXT NOT NULL DEFAULT ''",'schema_type'=>"TEXT NOT NULL DEFAULT ''",'tldr'=>"TEXT NOT NULL DEFAULT ''",'takeaways'=>"TEXT NOT NULL DEFAULT ''",'custom_schema'=>"TEXT NOT NULL DEFAULT ''"] as $col=>$def) if(!in_array($col,$cols,true)) $db->exec("ALTER TABLE reviews ADD COLUMN $col $def");
 if(!in_array('published_at',$cols,true)) $db->exec('UPDATE reviews SET published_at=substr(created_at,1,19)');
@@ -48,8 +51,8 @@ function live(): string { return "r.status='published' AND (r.published_at IS NU
 function categories(): array { return query('SELECT c.*, COUNT(r.id) AS total FROM categories c LEFT JOIN reviews r ON r.category_id=c.id AND '.live().' GROUP BY c.id ORDER BY c.id'); }
 function reviewUrl(array $r): string { return '/'.rawurlencode($r['slug']); }
 // Clean public URLs. Post slugs may not use these names.
-const RESERVED_SLUGS=['reviews','top-10','categories','category','compare','about','privacy','admin','admin-php','index-php','sitemap-xml','robots-txt','assets','uploads','search','feed'];
-function pagePath(string $page): string { return ['home'=>'/','reviews'=>'/reviews','top10'=>'/top-10','categories'=>'/categories','compare'=>'/compare','about'=>'/about','privacy'=>'/privacy'][$page]??'/'; }
+const RESERVED_SLUGS=['author','how-we-review','reviews','top-10','categories','category','compare','about','privacy','admin','admin-php','index-php','sitemap-xml','robots-txt','assets','uploads','search','feed'];
+function pagePath(string $page): string { return ['methodology'=>'/how-we-review','home'=>'/','reviews'=>'/reviews','top10'=>'/top-10','categories'=>'/categories','compare'=>'/compare','about'=>'/about','privacy'=>'/privacy'][$page]??'/'; }
 // Converts an old "/?page=…" link to its clean form; any other URL is returned unchanged.
 function cleanUrl(string $url): string {
  if(!str_starts_with($url,'/?'))return $url;
@@ -61,7 +64,7 @@ function cleanUrl(string $url): string {
  else $path=pagePath($page);
  return $path.($q?'?'.http_build_query($q):'').($frag!==''?'#'.$frag:'');
 }
-function safeImage(string $url): bool { return (bool)preg_match('~^https://[^\s]+$~i', $url) || (bool)preg_match('~^/assets/[a-zA-Z0-9_./-]+\.(jpg|jpeg|png|webp|svg)$~', $url) || (bool)preg_match('~^/uploads/[a-f0-9]{32}\.(jpg|png|webp)$~', $url); }
+function safeImage(string $url): bool { return (bool)preg_match('~^https://[^\s]+$~i', $url) || (bool)preg_match('~^/assets/[a-zA-Z0-9_./-]+\.(jpg|jpeg|png|webp|svg)$~', $url) || (bool)preg_match('~^/uploads/[a-f0-9]{32}\.(jpg|png|webp)$~', $url) || (bool)preg_match('~^/uploads/og/[a-z0-9-]+\.jpg$~', $url); }
 function icon(string $name, string $class='h-5 w-5'): string {
  $paths=['search'=>'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>','arrow'=>'<path d="M4 12h16m-6-6 6 6-6 6"/>','tech'=>'<rect x="4" y="3" width="16" height="13" rx="1"/><path d="M2 20h20M8 16v4m8-4v4"/>','shopping'=>'<path d="M4 7h16l1 14H3L4 7Zm4 0V5a4 4 0 0 1 8 0v2"/>','travel'=>'<path d="m3 10 7 2 5 9 2-1-2-8 6-6c2-3-1-5-3-3l-6 6-8-2-1 3Z"/>','gadgets'=>'<rect x="6" y="5" width="12" height="14" rx="3"/><path d="M9 5V1h6v4M9 19v4h6v-4m-6-6 2-3 2 1 2-3"/>','home'=>'<path d="m2 11 10-9 10 9M5 9v12h14V9M9 21v-8h6v8"/>','grid'=>'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>','check'=>'<path d="m5 12 4 4L19 6"/>','menu'=>'<path d="M3 6h18M3 12h18M3 18h18"/>','book'=>'<path d="M12 5c-4-3-8-2-10-1v16c3-2 7-2 10 0 3-2 7-2 10 0V4c-3-1-7-2-10 1Zm0 0v15"/>'];
  return '<svg class="'.e($class).'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'.($paths[$name]??$paths['grid']).'</svg>';
@@ -298,3 +301,75 @@ function popularLinks(int $n=4): array {
 }
 // A review is comparable/rankable only when it has a real score and at least pros or cons.
 function rated(string $alias='r'): string { return "$alias.score>0 AND (trim($alias.pros)!='' OR trim($alias.cons)!='')"; }
+
+require_once __DIR__.'/images.php';
+require_once __DIR__.'/gsc.php';
+require_once __DIR__.'/social.php';
+
+// ---- Authors (E-E-A-T) ----
+// Posts store the author's display name; a matching profile adds a photo, bio and an author page.
+function authorByName(string $name): ?array {
+ static $map=null;
+ if($map===null){$map=[];foreach(query('SELECT * FROM authors') as $a)$map[mb_strtolower($a['name'])]=$a;}
+ return $map[mb_strtolower(trim($name))]??null;
+}
+function authorUrl(array $a): string { return '/author/'.rawurlencode($a['slug']); }
+function authorLinks(array $a): array { return array_values(array_filter(array_map('trim',explode("\n",(string)$a['links'])),fn($u)=>preg_match('~^https://\S+$~',$u))); }
+function personSchema(array $a): array {
+ return array_filter(['@type'=>'Person','@id'=>siteBase().authorUrl($a).'#person','name'=>$a['name'],'url'=>siteBase().authorUrl($a),'jobTitle'=>$a['role']?:null,'description'=>$a['bio']?:null,
+  'image'=>$a['avatar']!==''&&safeImage($a['avatar'])?absUrl($a['avatar']):null,'sameAs'=>authorLinks($a)?:null,
+  'knowsAbout'=>array_values(array_filter(array_map('trim',explode(',',(string)$a['expertise']))))?:null,'worksFor'=>['@id'=>siteBase().'/#org']]);
+}
+const DEFAULT_METHODOLOGY = "Every guide and review on this site follows the same process, so you can see how we reach a recommendation.
+
+## 1. Research
+We start with the questions real buyers ask: what the product or service is for, who it suits and what the alternatives are. We read the official specifications, documentation and pricing pages, and note anything that is unclear or missing.
+
+## 2. Compare
+We look at the options side by side: features, ease of use, value, support and trade-offs. Where we give a score, it reflects how well a product does its job for the people it is meant for, not how many features it has.
+
+## 3. Explain
+We turn the details into practical advice: who should choose it, who should skip it, and what to check before buying.
+
+## How scores work
+Scores are out of 10 and only appear on reviews. Articles and buying guides are not scored or ranked.
+
+- **9–10:** outstanding for its purpose, with very few trade-offs
+- **7–8.9:** a strong choice with some limitations
+- **5–6.9:** fine for some people, but with clear compromises
+- **Below 5:** hard to recommend
+
+## Independence and affiliate links
+Some links are affiliate links: if you buy through them we may earn a commission at no extra cost to you. Commissions never change what we write, how we score a product or where it appears in a list. Brands cannot pay for a review or a better score.
+
+## Updates and corrections
+We review guides regularly and update them when prices, features or availability change. If you spot something out of date, please let us know and we will correct it.";
+
+// ---- Automatic internal links ----
+// Links the first mention of another live post's focus keyword (max $max links per article), preferring the
+// same category and longer phrases. Never inside existing links, headings or the quick-answer box, and never
+// to a post this article already links to.
+function autoLinks(string $html, int $postId, int $categoryId, int $max=4): string {
+ static $all=null;
+ $all??=array_map(fn($c)=>$c+['href'=>'/'.$c['slug']],query("SELECT r.id,r.slug,r.category_id,lower(trim(r.focus_keyword)) AS kw FROM reviews r WHERE ".live()." AND length(trim(r.focus_keyword))>=6 AND instr(trim(r.focus_keyword),' ')>0"));
+ $cands=array_filter($all,fn($c)=>(int)$c['id']!==$postId&&!str_contains($html,'href="'.$c['href'].'"'));
+ usort($cands,fn($a,$b)=>[(int)($b['category_id']==$categoryId),mb_strlen($b['kw'])]<=>[(int)($a['category_id']==$categoryId),mb_strlen($a['kw'])]);
+ $seen=[];$cands=array_values(array_filter($cands,function($c)use(&$seen){if(isset($seen[$c['kw']]))return false;return $seen[$c['kw']]=true;}));
+ // The post's category hub: link the first mention of the category name (e.g. "travel").
+ foreach(categories() as $cat)if((int)$cat['id']===$categoryId&&(int)$cat['total']>1&&mb_strlen($cat['name'])>=4&&!str_contains($html,'href="/category/'.$cat['slug'].'"'))$cands[]=['id'=>0,'kw'=>mb_strtolower(preg_replace('/\s*&\s*/u',' and ',$cat['name'])),'href'=>'/category/'.rawurlencode($cat['slug']),'category_id'=>$categoryId];
+ if(!$cands)return $html;
+ $parts=preg_split('/(<[^>]+>)/u',$html,-1,PREG_SPLIT_DELIM_CAPTURE);$skip=0;$done=0;
+ foreach($parts as $i=>$part){
+  if($part!==''&&$part[0]==='<'){
+   if(preg_match('~^<(a|h[1-6]|figure|figcaption|code|pre|button)\b~i',$part))$skip++;
+   elseif(preg_match('~^</(a|h[1-6]|figure|figcaption|code|pre|button)>~i',$part))$skip=max(0,$skip-1);
+   continue;
+  }
+  if($skip||trim($part)==='')continue;
+  foreach($cands as $k=>$c){
+   $re='/(?<![\p{L}\p{N}])('.preg_quote($c['kw'],'/').')(?![\p{L}\p{N}])/iu';
+   if(preg_match($re,$part)){$parts[$i]=$part=preg_replace($re,'<a href="'.e($c['href']).'">$1</a>',$part,1);unset($cands[$k]);if(++$done>=$max)break 2;break;}
+  }
+ }
+ return implode('',$parts);
+}

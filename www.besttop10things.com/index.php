@@ -6,7 +6,7 @@ require ROOT.'/app/layout.php';
 
 // Routing: clean URLs, with 301 redirects from the old "/?page=…" links.
 $path=rtrim(rawurldecode((string)parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH)),'/')?:'/';
-$routes=['/'=>'home','/index.php'=>'home','/reviews'=>'reviews','/top-10'=>'top10','/categories'=>'categories','/compare'=>'compare','/about'=>'about','/privacy'=>'privacy','/sitemap.xml'=>'sitemap','/robots.txt'=>'robots','/feed.xml'=>'feed','/llms.txt'=>'llms','/llms-full.txt'=>'llmsfull'];
+$routes=['/'=>'home','/index.php'=>'home','/reviews'=>'reviews','/top-10'=>'top10','/categories'=>'categories','/compare'=>'compare','/about'=>'about','/how-we-review'=>'methodology','/privacy'=>'privacy','/sitemap.xml'=>'sitemap','/robots.txt'=>'robots','/feed.xml'=>'feed','/llms.txt'=>'llms','/llms-full.txt'=>'llmsfull'];
 if(($routes[$path]??'')==='home'&&isset($_GET['page'])&&$_SERVER['REQUEST_METHOD']==='GET'){
  $target=cleanUrl('/?'.(string)($_SERVER['QUERY_STRING']??''));
  if(!str_starts_with($target,'/?')){header('Location: '.$target,true,301);exit;}
@@ -38,6 +38,7 @@ if(preg_match('~^/go/(\d+)$~',$path,$m)){
 }
 if(isset($routes[$path]))$page=$routes[$path];
 elseif(preg_match('~^/category/([a-z0-9-]+)$~',$path,$m)){$page='reviews';$_GET['category']=$m[1];}
+elseif(preg_match('~^/author/([a-z0-9-]+)$~',$path,$m)){$page='author';$_GET['author']=$m[1];}
 elseif(preg_match('~^/([a-z0-9-]+)$~',$path,$m)){$page='review';$_GET['slug']=$m[1];}
 else $page='404';
 if($page==='404')http_response_code(404);
@@ -62,8 +63,9 @@ if($page==='sitemap'){
  $newest=$posts?substr(max(array_map(fn($r)=>max((string)$r['updated_at'],(string)$r['published_at']),$posts)),0,10):date('Y-m-d');
  $catMod=[];foreach($posts as $r)$catMod[$r['cslug']]=max($catMod[$r['cslug']]??'',substr(max((string)$r['updated_at'],(string)$r['published_at']),0,10));
  $urls=[['/',$newest,null]];
- foreach(['reviews','top10','categories','compare','about','privacy'] as $p)$urls[]=[pagePath($p),in_array($p,['reviews','top10','categories'],true)?$newest:null,null];
+ foreach(['reviews','top10','categories','compare','about','methodology','privacy'] as $p)$urls[]=[pagePath($p),in_array($p,['reviews','top10','categories'],true)?$newest:null,null];
  foreach(categories() as $c)if($c['total'])$urls[]=['/category/'.rawurlencode($c['slug']),$catMod[$c['slug']]??null,null];
+ foreach(query('SELECT a.slug FROM authors a WHERE EXISTS (SELECT 1 FROM reviews r WHERE lower(r.author)=lower(a.name) AND '.live().')') as $a)$urls[]=['/author/'.rawurlencode($a['slug']),null,null];
  foreach($posts as $r)$urls[]=[reviewUrl($r),substr(max((string)$r['updated_at'],(string)$r['published_at']),0,10),safeImage($r['image'])?[absUrl($r['image']),$r['title']]:null];
  echo '<?xml version="1.0" encoding="UTF-8"?>'."\n".'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">';
  foreach($urls as [$u,$mod,$im])echo '<url><loc>'.e($base.$u).'</loc>'.($mod?'<lastmod>'.e($mod).'</lastmod>':'').($im?'<image:image><image:loc>'.e($im[0]).'</image:loc></image:image>':'').'</url>';
@@ -73,8 +75,8 @@ if($page==='feed'){
  header('Content-Type: application/rss+xml; charset=utf-8');
  $base=siteBase();$site=setting('site_name');
  $items=query('SELECT r.*,c.name AS category FROM reviews r JOIN categories c ON c.id=r.category_id WHERE '.live().' ORDER BY r.published_at DESC,r.id DESC LIMIT 30');
- echo '<?xml version="1.0" encoding="UTF-8"?>'."\n".'<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>'.e($site).'</title><link>'.e($base.'/').'</link><description>'.e(setting('description')).'</description><language>en</language><atom:link href="'.e($base.'/feed.xml').'" rel="self" type="application/rss+xml"/>';
- foreach($items as $r){$u=$base.reviewUrl($r);echo '<item><title>'.e($r['title']).'</title><link>'.e($u).'</link><guid isPermaLink="true">'.e($u).'</guid><pubDate>'.e(date(DATE_RSS,strtotime($r['published_at']??$r['created_at']))).'</pubDate><category>'.e($r['category']).'</category><description>'.e($r['excerpt']).'</description></item>';}
+ echo '<?xml version="1.0" encoding="UTF-8"?>'."\n".'<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>'.e($site).'</title><link>'.e($base.'/').'</link><description>'.e(setting('description')).'</description><language>en</language><atom:link href="'.e($base.'/feed.xml').'" rel="self" type="application/rss+xml"/>';
+ foreach($items as $r){$u=$base.reviewUrl($r);echo '<item><title>'.e($r['title']).'</title><link>'.e($u).'</link><guid isPermaLink="true">'.e($u).'</guid><pubDate>'.e(date(DATE_RSS,strtotime($r['published_at']??$r['created_at']))).'</pubDate><category>'.e($r['category']).'</category><description>'.e($r['excerpt']).'</description>'.(($im=shareImage($r,'social'))?'<enclosure url="'.e($base.$im).'" length="'.(int)@filesize(publicDir().$im).'" type="image/jpeg"/><media:content url="'.e($base.$im).'" medium="image" type="image/jpeg" width="1200" height="630"/>':'').'</item>';}
  echo '</channel></rss>';exit;
 }
 // llms.txt: a plain-text map of the site for AI assistants (llmstxt.org); llms-full.txt adds the article text.
@@ -110,10 +112,11 @@ if ($page==='review') {
  $review=query($join.'WHERE r.slug=? AND '.(isset($_SESSION['admin'],$_GET['preview'])?"r.status!='trash'":live()),[(string)($_GET['slug']??'')])[0]??null;
  if(!$review) { http_response_code(404); $page='404'; }
 }
-$valid=['home','review','reviews','top10','categories','about','privacy','compare','404'];
+if($page==='author'){$authorRow=query('SELECT * FROM authors WHERE slug=?',[(string)($_GET['author']??'')])[0]??null;if(!$authorRow){http_response_code(404);$page='404';}}
+$valid=['author','methodology','home','review','reviews','top10','categories','about','privacy','compare','404'];
 if(!in_array($page,$valid,true)){http_response_code(404);$page='404';}
-$titles=['home'=>'','reviews'=>'All Reviews & Buying Guides','top10'=>'Top 10 Lists: Our Highest-Rated Picks','categories'=>'Browse All Categories','about'=>'About Us','privacy'=>'Privacy Policy','compare'=>'Compare Top-Rated Picks Side by Side','404'=>'Page not found'];
-$descs=['reviews'=>'Browse every review and buying guide on '.setting('site_name').': honest trade-offs, practical tips and clear recommendations across tech, travel, shopping, lifestyle and more.','top10'=>'Our rated reviews ranked by review score, plus the latest buying guides, listed separately and unranked.','categories'=>'Explore reviews and buying guides by category, from tech and travel to fashion, home, education and more.','compare'=>'Compare rated reviews in the same category side by side: scores, pros and cons at a glance.','about'=>'Who we are, how we research and write our reviews, and how we keep our recommendations independent.','privacy'=>'How '.setting('site_name').' collects, uses and protects information, including cookies and outbound link tracking.','404'=>'The page you were looking for could not be found.'];
+$titles=['methodology'=>'How We Review','author'=>'','home'=>'','reviews'=>'All Reviews & Buying Guides','top10'=>'Top 10 Lists: Our Highest-Rated Picks','categories'=>'Browse All Categories','about'=>'About Us','privacy'=>'Privacy Policy','compare'=>'Compare Top-Rated Picks Side by Side','404'=>'Page not found'];
+$descs=['methodology'=>'How '.setting('site_name').' researches, compares and scores products: our review process, scoring scale and editorial independence.','reviews'=>'Browse every review and buying guide on '.setting('site_name').': honest trade-offs, practical tips and clear recommendations across tech, travel, shopping, lifestyle and more.','top10'=>'Our rated reviews ranked by review score, plus the latest buying guides, listed separately and unranked.','categories'=>'Explore reviews and buying guides by category, from tech and travel to fashion, home, education and more.','compare'=>'Compare rated reviews in the same category side by side: scores, pros and cons at a glance.','about'=>'Who we are, how we research and write our reviews, and how we keep our recommendations independent.','privacy'=>'How '.setting('site_name').' collects, uses and protects information, including cookies and outbound link tracking.','404'=>'The page you were looking for could not be found.'];
 $base=siteBase();$crumb=fn(array $items)=>['@type'=>'BreadcrumbList','itemListElement'=>array_map(fn($i,$x)=>['@type'=>'ListItem','position'=>$i+1,'name'=>$x[0],'item'=>$base.$x[1]],array_keys($items),$items)];
 $seo=[];$pageTitle=$titles[$page]??'';$pageDesc=$descs[$page]??'';
 if($page==='review'){
@@ -121,17 +124,19 @@ if($page==='review'){
  $pub=date('c',strtotime($r0['published_at']??$r0['created_at']));$mod=date('c',max(strtotime($r0['updated_at']),strtotime($r0['published_at']??$r0['created_at'])));
  $pageTitle=$r0['meta_title']?:$r0['title'];$pageDesc=$r0['meta_description']?:$r0['excerpt'];
  $stype=array_key_exists($r0['schema_type']??'',SCHEMA_TYPES)?$r0['schema_type']:'BlogPosting';if($stype==='Review'&&!($r0['score']>0&&($r0['brand']??'')!==''))$stype='BlogPosting';
- $article=['@type'=>$stype,'@id'=>$url.'#article','mainEntityOfPage'=>$url,'url'=>$url,'headline'=>mb_substr($r0['title'],0,110),'description'=>$pageDesc,'datePublished'=>$pub,'dateModified'=>$mod,'inLanguage'=>$lang,'articleSection'=>$r0['category'],'wordCount'=>str_word_count(strip_tags($r0['body'])),'author'=>['@type'=>'Organization','name'=>$r0['author']?:setting('site_name'),'url'=>$base.'/about'],'publisher'=>['@id'=>$base.'/#org'],'isPartOf'=>['@id'=>$base.'/#website']];
+ $article=['@type'=>$stype,'@id'=>$url.'#article','mainEntityOfPage'=>$url,'url'=>$url,'headline'=>mb_substr($r0['title'],0,110),'description'=>$pageDesc,'datePublished'=>$pub,'dateModified'=>$mod,'inLanguage'=>$lang,'articleSection'=>$r0['category'],'wordCount'=>str_word_count(strip_tags($r0['body'])),'author'=>($au=authorByName((string)$r0['author']))?personSchema($au):['@type'=>'Organization','name'=>$r0['author']?:setting('site_name'),'url'=>$base.'/about'],'publisher'=>['@id'=>$base.'/#org'],'isPartOf'=>['@id'=>$base.'/#website']];
  if(safeImage($r0['image']))$article['image']=['@type'=>'ImageObject','url'=>absUrl($r0['image'])];
  if(trim($r0['tldr']??'')!==''){$article['abstract']=trim($r0['tldr']);$article['speakable']=['@type'=>'SpeakableSpecification','cssSelector'=>['.quick-answer','.post-title']];}
  if(($r0['focus_keyword']??'')!=='')$article['keywords']=$r0['focus_keyword'];
- if($stype==='Review'){unset($article['articleSection'],$article['wordCount']);$article['itemReviewed']=['@type'=>'Organization','name'=>$r0['brand']];$article['reviewRating']=['@type'=>'Rating','ratingValue'=>(float)$r0['score'],'bestRating'=>10,'worstRating'=>0];$article['author']=['@type'=>'Person','name'=>$r0['author']?:setting('site_name')];}
+ if($stype==='Review'){unset($article['articleSection'],$article['wordCount']);$article['itemReviewed']=['@type'=>'Organization','name'=>$r0['brand']];$article['reviewRating']=['@type'=>'Rating','ratingValue'=>(float)$r0['score'],'bestRating'=>10,'worstRating'=>0];if(!authorByName((string)$r0['author']))$article['author']=['@type'=>'Person','name'=>$r0['author']?:setting('site_name')];}
  if($stype==='HowTo'){preg_match_all('/^##\s+(.+)$/m',$r0['body'],$hs);$article=['@type'=>'HowTo','@id'=>$url.'#howto','name'=>$r0['title'],'description'=>$pageDesc,'inLanguage'=>$lang,'image'=>$article['image']??null,'step'=>array_map(fn($i,$h)=>['@type'=>'HowToStep','position'=>$i+1,'name'=>trim($h,' #*'),'url'=>$url.'#'.slug($h)],array_keys($hs[1]),$hs[1])];$article=array_filter($article);}
  elseif(($r0['brand']??'')!=='')$article['mentions']=['@type'=>'Brand','name'=>$r0['brand']];
  $seo=['type'=>'article','image'=>$r0['image'],'published'=>$pub,'modified'=>$mod,'section'=>$r0['category'],'lang'=>$lang,'jsonld'=>[$article,$crumb([['Home','/'],[$r0['category'],'/category/'.rawurlencode($r0['category_slug'])],[$r0['title'],reviewUrl($r0)]])]];
  if($faq=faqFrom($r0['body']))$seo['jsonld'][]=['@type'=>'FAQPage','@id'=>$url.'#faq','mainEntity'=>array_map(fn($x)=>['@type'=>'Question','name'=>$x[0],'acceptedAnswer'=>['@type'=>'Answer','text'=>$x[1]]],$faq)];
  if($custom=json_decode((string)($r0['custom_schema']??''),true))foreach(isset($custom['@type'])?[$custom]:(array)($custom['@graph']??$custom) as $node)if(is_array($node)&&isset($node['@type'])){unset($node['@context']);$seo['jsonld'][]=$node;}
+ // Share image: the editor's override, else the generated 1200×630 title card, else the featured image.
  if(($r0['og_image']??'')!==''&&safeImage($r0['og_image']))$seo['image']=$r0['og_image'];
+ elseif($og=shareImage($r0,'social'))$seo['image']=$og;
  if(($r0['seo_canonical']??'')!=='')$seo['canonical_abs']=$r0['seo_canonical'];
  if(in_array($r0['seo_robots']??'',['noindex, follow','index, nofollow','noindex, nofollow'],true))$seo['robots']=$r0['seo_robots'];
  if(isset($_GET['preview']))$seo['robots']='noindex, nofollow';
@@ -148,6 +153,11 @@ if($page==='review'){
  if(trim((string)($_GET['q']??''))!==''||isset($_GET['sort'])||($catSlug!==''&&(!$curCat||!(int)$curCat['total'])))$seo['robots']='noindex, follow';
 }elseif($page==='404')$seo['robots']='noindex, follow';
 elseif($page==='home')$seo['jsonld']=[['@type'=>'WebPage','@id'=>$base.'/#webpage','url'=>$base.'/','name'=>homeTitle(),'description'=>setting('description'),'isPartOf'=>['@id'=>$base.'/#website'],'about'=>['@id'=>$base.'/#org']]];
+elseif($page==='author'){
+ $pageTitle=$authorRow['name'].($authorRow['role']!==''?', '.$authorRow['role']:'');$pageDesc=$authorRow['bio']!==''?mb_strimwidth($authorRow['bio'],0,300,'…'):'Articles and reviews by '.$authorRow['name'].' on '.setting('site_name').'.';
+ $seo['type']='profile';if($authorRow['avatar']!==''&&safeImage($authorRow['avatar']))$seo['image']=$authorRow['avatar'];
+ $seo['jsonld']=[['@type'=>'ProfilePage','@id'=>$base.authorUrl($authorRow),'url'=>$base.authorUrl($authorRow),'name'=>$pageTitle,'mainEntity'=>personSchema($authorRow),'isPartOf'=>['@id'=>$base.'/#website']],$crumb([['Home','/'],['Authors','/about'],[$authorRow['name'],authorUrl($authorRow)]])];
+}elseif($page==='methodology')$seo['jsonld']=[['@type'=>'WebPage','@id'=>$base.'/how-we-review','url'=>$base.'/how-we-review','name'=>'How We Review','description'=>$pageDesc,'publisher'=>['@id'=>$base.'/#org'],'isPartOf'=>['@id'=>$base.'/#website']],$crumb([['Home','/'],['How We Review','/how-we-review']])];
 elseif($page==='about')$seo['jsonld']=[['@type'=>'AboutPage','url'=>$base.'/about','name'=>'About '.setting('site_name'),'about'=>['@id'=>$base.'/#org']]];
 headerView($pageTitle,$pageDesc,$page==='review'?'reviews':$page,$seo);
 // Splits the homepage headline so its last two words can be highlighted.
@@ -244,7 +254,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
 <section class="page-hero"><div class="wrap">
  <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><?php if($current): ?><a href="<?= pagePath($page) ?>"><?= $page==='top10'?'Top 10 Lists':'Reviews' ?></a><?= ficon('right','ic ic-xs') ?><span><?= e($current['name']) ?></span><?php else: ?><span><?= $page==='top10'?'Top 10 Lists':'Reviews' ?></span><?php endif ?></nav>
  <p class="eyebrow"><?= $page==='top10'?'The shortlist':'Find your next favourite' ?></p>
- <h1 class="page-title"><?= e($current?($page==='top10'?'Top 10 in '.$current['name']:$current['name']):($page==='top10'?'The top 10 edit':($q!==''?'Results for “'.$q.'”':'Explore our reviews'))) ?></h1>
+ <h1 class="page-title"><?= e($current?($page==='top10'?'Top 10 in '.$current['name']:$current['name'].' Guides & Reviews'):($page==='top10'?'The top 10 edit':($q!==''?'Results for “'.$q.'”':'Explore our reviews'))) ?></h1>
  <p class="section-sub"><?= $page==='top10'?'Rated reviews ranked by their review score, plus our latest buying guides listed separately.':'Useful details, honest trade-offs and clear comparisons, all in one place.' ?></p>
  <form class="filter-bar" action="<?= pagePath($page) ?>">
   <label class="field-ic"><?= ficon('search') ?><input name="q" value="<?= e($q) ?>" placeholder="Search products, ideas and more" aria-label="Search"></label>
@@ -261,7 +271,14 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
  <?php else: ?><ol class="rank-list"><?php foreach($results as $i=>$r): ?><li class="rank"><span class="rank-num"><?= $i+1 ?></span><a class="rank-img" href="<?= e(reviewUrl($r)) ?>" tabindex="-1" aria-hidden="true"><img src="<?= e($r['image']) ?>" alt="" loading="lazy"></a><div class="rank-body"><span class="badge badge-<?= catStyle(['slug'=>$r['category_slug'],'id'=>$r['category_id']])[1] ?>"><?= e($r['category']) ?></span><h2><a href="<?= e(reviewUrl($r)) ?>"><?= e($r['title']) ?></a></h2><p><?= e($r['excerpt']) ?></p></div><div class="rank-side"><?php if($r['score']>0): ?><span class="score-big"><?= number_format((float)$r['score'],1) ?><small>/10</small></span><?php endif ?><a class="btn btn-outline" href="<?= e(reviewUrl($r)) ?>">Read <?= ficon('arrow','ic ic-sm') ?></a></div></li><?php endforeach ?></ol><?php endif ?>
  <?php if($guides): ?><div class="section-head guides-head"><div><h2 class="section-title">Latest buying guides</h2><p class="section-sub">Editorial guides and articles. These are not rated or ranked.</p></div></div><div class="card-grid"><?php foreach($guides as $r) reviewCard($r); ?></div><?php endif ?>
  <?php else: ?>
- <div class="result-bar"><span><?= count($results) ?> <?= count($results)===1?'result':'results' ?></span><a class="link-arrow" href="/compare<?= $cat!==''?'?category='.e(rawurlencode($cat)):'' ?>">Compare reviews <?= ficon('arrow','ic ic-sm') ?></a></div>
+ <?php if($page==='reviews'&&$current&&$q===''&&$results): // Category hub: intro, the main guides to start with, then everything else
+  $pillars=query($join.'WHERE '.live().' AND c.slug=? ORDER BY r.featured DESC,length(r.body) DESC LIMIT 3',[$current['slug']]);$pids=array_column($pillars,'id');
+  $resultsTotal=count($results);if(count($results)>4)$results=array_values(array_filter($results,fn($r)=>!in_array($r['id'],$pids)));else $pillars=[]; ?>
+ <div class="hub-intro-box prose"><?= trim((string)($current['intro']??''))!==''?renderBody($current['intro']):'<p>Everything we have published about <strong>'.e($current['name']).'</strong> in one place: '.(int)$current['total'].' guides and reviews with practical advice, honest trade-offs and clear recommendations. New to the topic? Start with the essential guides below.</p>' ?></div>
+ <?php if($pillars): ?><div class="section-head"><div><p class="eyebrow">Start here</p><h2 class="section-title">Essential <?= e($current['name']) ?> guides</h2></div></div><div class="card-grid hub-pillars"><?php foreach($pillars as $r) reviewCard($r); ?></div>
+ <div class="section-head guides-head"><div><h2 class="section-title">All <?= e($current['name']) ?> articles</h2></div></div><?php endif ?>
+ <?php endif ?>
+ <div class="result-bar"><span><?= $n=$resultsTotal??count($results) ?> <?= $n===1?'result':'results' ?></span><a class="link-arrow" href="/compare<?= $cat!==''?'?category='.e(rawurlencode($cat)):'' ?>">Compare reviews <?= ficon('arrow','ic ic-sm') ?></a></div>
  <?php if(!$results): ?><div class="empty"><span class="cat-dot cat-dot-lg tone-teal"><?= ficon('search') ?></span><h2>No reviews found</h2><p>Try another keyword or explore a different category.</p><a class="btn btn-primary" href="<?= pagePath($page) ?>">Clear filters</a></div>
  <?php else: ?><div class="card-grid"><?php foreach($results as $r) reviewCard($r); ?></div><?php endif ?><?php endif ?>
 </section>
@@ -269,7 +286,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
 <?php elseif($page==='review'): $r=$review; $tone=catStyle(['slug'=>$r['category_slug'],'id'=>$r['category_id']])[1];
  preg_match_all('/^##\s+(.+)$/m',$r['body'],$m); $toc=array_map(fn($h)=>trim(str_replace('**','',preg_replace('~\[([^\]]+)\]\([^)]*\)~','$1',$h))),$m[1]);
  $shareUrl='https://'.($_SERVER['HTTP_HOST']??'besttop10things.com').reviewUrl($r);
- $share=['facebook'=>['Facebook','https://www.facebook.com/sharer/sharer.php?u='.rawurlencode($shareUrl)],'x'=>['X','https://twitter.com/intent/tweet?url='.rawurlencode($shareUrl).'&text='.rawurlencode($r['title'])],'pinterest'=>['Pinterest','https://pinterest.com/pin/create/button/?url='.rawurlencode($shareUrl).'&description='.rawurlencode($r['title'])],'linkedin'=>['LinkedIn','https://www.linkedin.com/sharing/share-offsite/?url='.rawurlencode($shareUrl)]];
+ $share=['facebook'=>['Facebook','https://www.facebook.com/sharer/sharer.php?u='.rawurlencode($shareUrl)],'x'=>['X','https://twitter.com/intent/tweet?url='.rawurlencode($shareUrl).'&text='.rawurlencode($r['title'])],'pinterest'=>['Pinterest','https://pinterest.com/pin/create/button/?url='.rawurlencode($shareUrl).'&media='.rawurlencode(absUrl(shareImage($r,'pin')??$r['image'])).'&description='.rawurlencode($r['title'])],'linkedin'=>['LinkedIn','https://www.linkedin.com/sharing/share-offsite/?url='.rawurlencode($shareUrl)]];
  $hasCta=$r['brand']!==''&&$r['cta_url']!=='';
  $takeaways=$r['score']>0?[]:array_values(array_filter(array_map('trim',explode("\n",$r['pros']))));
  $related=query($join.'WHERE '.live().' AND r.id!=? AND r.category_id=? ORDER BY r.published_at DESC,r.id DESC LIMIT 3',[$r['id'],$r['category_id']]);
@@ -285,14 +302,14 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
    <h1 class="post-title"><?= e($r['title']) ?></h1>
    <p class="post-dek"><?= e($r['excerpt']) ?></p>
    <div class="byline">
-    <span class="avatar-lg"><?= e(strtoupper(substr($r['author'],0,1))) ?></span>
-    <div><b><?= e($r['author']) ?></b><span class="meta"><?= e(date('M j, Y',strtotime($r['published_at']??$r['created_at']))) ?><i>•</i><?= readMinutes($r['body']) ?> min read</span></div>
+    <?php $au=authorByName((string)$r['author']); if($au&&$au['avatar']!==''&&safeImage($au['avatar'])): ?><img class="avatar-lg avatar-img" src="<?= e($au['avatar']) ?>" alt="" width="48" height="48"><?php else: ?><span class="avatar-lg"><?= e(strtoupper(substr($r['author'],0,1))) ?></span><?php endif ?>
+    <div><b><?php if($au): ?><a href="<?= e(authorUrl($au)) ?>" rel="author"><?= e($au['name']) ?></a><?php else: ?><?= e($r['author']) ?><?php endif ?></b><span class="meta"><?php if($au&&$au['role']!==''): ?><?= e($au['role']) ?><i>•</i><?php endif ?><?= e(date('M j, Y',strtotime($r['published_at']??$r['created_at']))) ?><i>•</i><?= readMinutes($r['body']) ?> min read</span></div>
     <div class="share"><button type="button" class="share-btn" data-copy-link="<?= e($shareUrl) ?>" aria-label="Copy link" title="Copy link"><?= ficon('link','ic ic-sm') ?></button><?php foreach($share as $k=>[$label,$url]): ?><a class="share-btn share-<?= $k ?>" href="<?= e($url) ?>" target="_blank" rel="noopener" aria-label="Share on <?= $label ?>" title="Share on <?= $label ?>"><?= ficon($k,'ic ic-sm') ?></a><?php endforeach ?></div>
    </div>
    <img class="post-img" src="<?= e($r['image']) ?>" alt="<?= e($r['title']) ?>">
    <?php if($r['demo']): ?><p class="note note-amber">This is a sample review. Images, ratings and observations demonstrate the website and do not represent a verified product test.</p><?php endif ?>
    <?php $tk=array_values(array_filter(array_map('trim',explode("\n",$r['takeaways']??'')))); if(trim($r['tldr']??'')!==''||$tk): ?><aside class="quick-answer" aria-label="Quick answer"><p class="qa-label"><?= ficon('check','ic ic-sm') ?> Quick answer</p><?php if(trim($r['tldr'])!==''): ?><p class="qa-text"><?= e(trim($r['tldr'])) ?></p><?php endif ?><?php if($tk): ?><p class="qa-sub">Key takeaways</p><ul class="qa-list"><?php foreach($tk as $t): ?><li><?= e(ltrim($t,'-• ')) ?></li><?php endforeach ?></ul><?php endif ?></aside><?php endif ?>
-   <div class="prose post-body"><?php trackPost((int)$r['id']); ?><?= renderBody($r['body']) ?></div>
+   <div class="prose post-body"><?php trackPost((int)$r['id']); ?><?= autoLinks(renderBody($r['body']),(int)$r['id'],(int)$r['category_id']) ?></div>
    <?php if($hasCta): ?><div class="cta-band"><div><p class="eyebrow">Ready to explore?</p><h2><?= e($r['brand']) ?></h2><?php if($r['brand_about']!==''): ?><p><?= e($r['brand_about']) ?></p><?php endif ?></div><a class="btn btn-primary" href="<?= e(trackUrl($r['cta_url'],'cta-band',$r['brand'])) ?>" target="_blank" rel="sponsored nofollow noopener">Visit <?= e($r['brand']) ?> <?= ficon('external','ic ic-sm') ?></a></div><?php endif ?>
    <p class="disclose-line"><?= ficon('doc','ic ic-sm') ?> This article may contain affiliate links. We may earn a commission if you buy through them, at no extra cost to you.</p>
   </div>
@@ -336,6 +353,26 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
 </div></section>
 <section class="wrap section section-tight"><div class="cat-cards"><?php foreach($shownCats as $c): [$ic,$tone]=catStyle($c); ?><a class="cat-card" href="/category/<?= e($c['slug']) ?>"><span class="cat-dot cat-dot-xl tone-<?= $tone ?>"><?= ficon($ic) ?></span><h2><?= e($c['name']) ?></h2><p><?= (int)$c['total'] ?> review<?= (int)$c['total']===1?'':'s' ?></p><span class="link-arrow">Explore <?= ficon('arrow','ic ic-sm') ?></span></a><?php endforeach ?></div></section>
 
+<?php elseif($page==='methodology'): ?>
+<section class="page-hero"><div class="wrap narrow-wrap">
+ <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><span>How We Review</span></nav>
+ <p class="eyebrow">Our methodology</p><h1 class="page-title">How we review</h1><p class="section-sub">Research, compare, explain: the process behind every guide and score.</p>
+</div></section>
+<section class="wrap narrow-wrap section section-tight"><div class="prose post-body"><?= renderBody(trim(setting('methodology'))?:DEFAULT_METHODOLOGY) ?></div>
+ <?php $team=query('SELECT * FROM authors ORDER BY id'); if($team): ?><h2 class="section-title team-title">The team</h2><div class="team-grid"><?php foreach($team as $a): ?><a class="team-card" href="<?= e(authorUrl($a)) ?>"><?php if($a['avatar']!==''&&safeImage($a['avatar'])): ?><img src="<?= e($a['avatar']) ?>" alt="" loading="lazy"><?php else: ?><span class="avatar-lg"><?= e(mb_strtoupper(mb_substr($a['name'],0,1))) ?></span><?php endif ?><span><b><?= e($a['name']) ?></b><small><?= e($a['role']) ?></small></span></a><?php endforeach ?></div><?php endif ?>
+</section>
+
+<?php elseif($page==='author'): $a=$authorRow; $posts=query($join.'WHERE '.live().' AND lower(r.author)=lower(?) ORDER BY r.published_at DESC',[$a['name']]); ?>
+<section class="page-hero"><div class="wrap narrow-wrap">
+ <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><a href="/how-we-review">Our team</a><?= ficon('right','ic ic-xs') ?><span><?= e($a['name']) ?></span></nav>
+ <div class="author-head"><?php if($a['avatar']!==''&&safeImage($a['avatar'])): ?><img class="author-photo" src="<?= e($a['avatar']) ?>" alt="<?= e($a['name']) ?>"><?php else: ?><span class="author-photo avatar-lg"><?= e(mb_strtoupper(mb_substr($a['name'],0,1))) ?></span><?php endif ?>
+  <div><p class="eyebrow"><?= e($a['role']?:'Author') ?></p><h1 class="page-title"><?= e($a['name']) ?></h1>
+  <?php if($a['expertise']!==''): ?><p class="author-tags"><?php foreach(array_filter(array_map('trim',explode(',',$a['expertise']))) as $t): ?><span class="chip-tag"><?= e($t) ?></span><?php endforeach ?></p><?php endif ?></div></div>
+ <?php if($a['bio']!==''): ?><div class="prose author-bio"><?php foreach(preg_split('/\n\s*\n/',trim($a['bio'])) as $para): ?><p><?= nl2br(e($para)) ?></p><?php endforeach ?></div><?php endif ?>
+ <?php if($links=authorLinks($a)): ?><p class="author-links"><?php foreach($links as $u): ?><a href="<?= e($u) ?>" target="_blank" rel="noopener me"><?= e(preg_replace('/^www\./','',(string)parse_url($u,PHP_URL_HOST))) ?></a><?php endforeach ?></p><?php endif ?>
+</div></section>
+<section class="wrap section section-tight"><h2 class="section-title"><?= count($posts) ?> article<?= count($posts)===1?'':'s' ?> by <?= e($a['name']) ?></h2><?php if($posts): ?><div class="card-grid"><?php foreach($posts as $r) reviewCard($r); ?></div><?php else: ?><p class="muted">No published articles yet.</p><?php endif ?></section>
+
 <?php elseif($page==='about'||$page==='privacy'): ?>
 <section class="page-hero"><div class="wrap narrow-wrap">
  <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><span><?= $page==='about'?'About':'Privacy' ?></span></nav>
@@ -345,6 +382,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
  <?php if($page==='about'): ?>
   <p><?= e(setting('site_name')) ?> is a place to explore product and service reviews, buying guides and top 10 lists across the things that make up everyday life.</p>
   <h2 id="how">How we review</h2>
+  <p><a href="/how-we-review">Read our full review methodology and scoring scale →</a></p>
   <div class="how-steps"><?php foreach([['doc','Research','Understand the features, the context and the choices.'],['scale','Compare','Look at the strengths and the trade-offs side by side.'],['bulb','Explain','Turn the details into practical, readable advice.']] as $i=>[$ic,$t,$d]): ?><div class="how-step"><span class="cat-dot cat-dot-lg tone-teal"><?= ficon($ic) ?></span><h3><small>0<?= $i+1 ?></small> <?= $t ?></h3><p><?= $d ?></p></div><?php endforeach ?></div>
   <p>Our editorial framework focuses on usefulness, ease of use, features and value. Reviews can include a score, strengths, limitations and a clear verdict, so readers can see the reasoning behind a recommendation.</p>
   <h2>Affiliate links</h2>

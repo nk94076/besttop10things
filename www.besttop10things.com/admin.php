@@ -21,6 +21,9 @@ function storeUpload(array $file): string {
  if(!is_dir(UPLOAD_DIR)&&!mkdir(UPLOAD_DIR,0755,true))throw new RuntimeException('Image storage is unavailable.');
  $name=bin2hex(random_bytes(16)).'.'.$extensions[$info['mime']];
  if(!move_uploaded_file($file['tmp_name'],UPLOAD_DIR.'/'.$name))throw new RuntimeException('The image could not be saved.');
+ // Smaller, faster images: convert to WebP (max 1920px wide) and drop the original.
+ $webp=toWebp(UPLOAD_DIR,$name);
+ if($webp!==$name){@unlink(UPLOAD_DIR.'/'.$name);$name=$webp;}
  return '/uploads/'.$name;
 }
 function mediaFiles(): array {
@@ -124,7 +127,8 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    $id=savePost($in,$id);
    $state=postState(query('SELECT status,published_at FROM reviews WHERE id=?',[$id])[0]);
    if($state==='published')indexNowPing([reviewUrl(query('SELECT slug FROM reviews WHERE id=?',[$id])[0]),'/','/sitemap.xml']);
-   flash(['published'=>'Post published.','scheduled'=>'Post scheduled.','draft'=>'Draft saved.'][$state],'/admin.php?view=edit&id='.$id);
+   $social=$state==='published'?autoSocial($id):null;
+   flash(['published'=>'Post published.','scheduled'=>'Post scheduled.','draft'=>'Draft saved.'][$state].($social?' '.$social:''),'/admin.php?view=edit&id='.$id);
   }
   if($action==='quick_draft'){
    $cat=(int)db()->query('SELECT id FROM categories ORDER BY id LIMIT 1')->fetchColumn();
@@ -143,6 +147,30 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    if($do==='publish')indexNowPing(array_map('reviewUrl',query("SELECT slug FROM reviews r WHERE id IN ($in) AND ".live(),$ids)));
    $n=count($ids);$labels=['publish'=>'published','draft'=>'moved to drafts','trash'=>'moved to the Trash','restore'=>'restored from the Trash','delete'=>'permanently deleted'];
    flash("$n post".($n>1?'s':'')." {$labels[$do]}.",backTo('/admin.php?view=posts'));
+  }
+  if($action==='gsc_settings'){
+   $prop=trim((string)($_POST['gsc_property']??''));
+   if($prop!==''&&!preg_match('~^(sc-domain:[a-z0-9.-]+|https?://[^\s]+/)$~i',$prop))throw new RuntimeException('Use the property exactly as in Search Console, e.g. sc-domain:besttop10things.com or https://www.besttop10things.com/');
+   run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['gsc_property',$prop]);
+   $json=trim((string)($_POST['gsc_key']??''));if($json!=='')gscSaveKey($json);
+   if(isset($_POST['gsc_disconnect'])){@unlink(GSC_KEY_FILE);run('DELETE FROM settings WHERE key LIKE ?',['gsc_cache_%']);}
+   flash('Search Console settings saved.','/admin.php?view=search');
+  }
+  if($action==='pin_post'){
+   $pid=(int)($_POST['id']??0);pinPost($pid);
+   flash('Pinned to Pinterest.',backTo('/admin.php?view=posts'));
+  }
+  if($action==='pinterest'){
+   $token=trim((string)($_POST['pinterest_token']??''));
+   $save=fn($k,$v)=>run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,$v]);
+   if(isset($_POST['disconnect'])){foreach(['pinterest_token','pinterest_board','pinterest_boards','pinterest_auto'] as $k)$save($k,'');flash('Pinterest disconnected.','/admin.php?view=seo#pinterest');}
+   if($token!==''){if(!preg_match('/^[A-Za-z0-9_\-.:]{20,2000}$/',$token))throw new RuntimeException('That does not look like a Pinterest access token.');$save('pinterest_token',$token);}
+   if(pinterestToken()==='')throw new RuntimeException('Paste a Pinterest access token.');
+   $boards=pinterestBoards();$save('pinterest_boards',json_encode($boards,JSON_UNESCAPED_UNICODE));
+   $board=(string)($_POST['pinterest_board']??'');if($board!==''&&!isset($boards[$board]))throw new RuntimeException('Choose one of your boards.');
+   $save('pinterest_board',$board!==''?$board:(string)(array_key_first($boards)??''));
+   $save('pinterest_auto',isset($_POST['pinterest_auto'])?'1':'0');
+   flash('Pinterest connected: '.count($boards).' board'.(count($boards)===1?'':'s').' found.','/admin.php?view=seo#pinterest');
   }
   if($action==='duplicate'){
    $r=query('SELECT * FROM reviews WHERE id=?',[(int)($_POST['id']??0)])[0]??null;if(!$r)throw new RuntimeException('Post not found.');
@@ -168,6 +196,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    if(query('SELECT id FROM categories WHERE slug=? AND id!=?',[$slug,$id]))throw new RuntimeException('A category with this name already exists.');
    $icon=(string)($_POST['icon']??'grid');if(!in_array($icon,['tech','shopping','travel','gadgets','home','grid'],true))$icon='grid';
    if($id)run('UPDATE categories SET name=?,slug=?,icon=? WHERE id=?',[$name,$slug,$icon,$id]);else run('INSERT INTO categories(name,slug,icon) VALUES (?,?,?)',[$name,$slug,$icon]);
+   if($id&&isset($_POST['intro'])){$intro=trim(str_replace("\r",'',(string)$_POST['intro']));if(strlen($intro)>8000)throw new RuntimeException('The hub introduction is too long.');run('UPDATE categories SET intro=? WHERE id=?',[$intro,$id]);}
    flash('Category saved.','/admin.php?view=categories');
   }
   if($action==='delete_category'){
@@ -217,6 +246,30 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    foreach(['seo_title'=>200,'meta_keywords'=>500,] as $k=>$max){$v=trim((string)($_POST[$k]??''));if(strlen($v)>$max)throw new RuntimeException('An SEO field is too long.');$save($k,$v);}
    flash('Appearance saved.','/admin.php?view=appearance');
   }
+  if($action==='save_author'){
+   $aid=(int)($_POST['id']??0);$name=trim((string)($_POST['name']??''));
+   if($name===''||mb_strlen($name)>80)throw new RuntimeException('Enter a name of 1–80 characters.');
+   $slugA=slug((string)($_POST['slug']??'')?:$name);
+   if(query('SELECT id FROM authors WHERE (slug=? OR lower(name)=lower(?)) AND id!=?',[$slugA,$name,$aid]))throw new RuntimeException('Another author already uses this name or URL.');
+   $f=[];foreach(['role'=>120,'bio'=>3000,'expertise'=>300,'links'=>2000] as $k=>$max){$f[$k]=trim(str_replace("\r",'',(string)($_POST[$k]??'')));if(mb_strlen($f[$k])>$max)throw new RuntimeException(ucfirst($k).' is too long.');}
+   foreach(array_filter(explode("\n",$f['links']),'trim') as $u)if(!preg_match('~^https://\S+$~',trim($u)))throw new RuntimeException('Profile links must each start with https://.');
+   $avatar=trim((string)($_POST['avatar']??''));
+   $up=$_FILES['avatar_upload']??null;if($up&&($up['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_NO_FILE)$avatar=storeUpload($up);
+   if($avatar!==''&&!safeImage($avatar))throw new RuntimeException('The photo must be an uploaded image or an https:// URL.');
+   $old=$aid?(query('SELECT name FROM authors WHERE id=?',[$aid])[0]['name']??null):null;
+   if($aid&&$old===null)throw new RuntimeException('Author not found.');
+   if($aid)run('UPDATE authors SET name=?,slug=?,role=?,bio=?,avatar=?,expertise=?,links=? WHERE id=?',[$name,$slugA,$f['role'],$f['bio'],$avatar,$f['expertise'],$f['links'],$aid]);
+   else{run('INSERT INTO authors(name,slug,role,bio,avatar,expertise,links,created_at) VALUES (?,?,?,?,?,?,?,?)',[$name,$slugA,$f['role'],$f['bio'],$avatar,$f['expertise'],$f['links'],date('c')]);$aid=(int)db()->lastInsertId();}
+   // Renaming an author keeps their posts attached.
+   if($old!==null&&$old!==$name)run('UPDATE reviews SET author=? WHERE lower(author)=lower(?)',[$name,$old]);
+   flash('Author saved.','/admin.php?view=authors&id='.$aid);
+  }
+  if($action==='delete_author'){run('DELETE FROM authors WHERE id=?',[(int)($_POST['id']??0)]);flash('Author profile deleted. Their posts keep the name as plain text.','/admin.php?view=authors');}
+  if($action==='save_methodology'){
+   $m=trim(str_replace("\r",'',(string)($_POST['methodology']??'')));if(strlen($m)>30000)throw new RuntimeException('The methodology text is too long.');
+   run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['methodology',$m]);
+   flash('"How we review" page saved.','/admin.php?view=authors#methodology');
+  }
   if($action==='seo_settings'){
    $vals=[];
    foreach(['google_verification'=>200,'bing_verification'=>200,'yandex_verification'=>200,'pinterest_verification'=>200,'ga_id'=>30,'org_about'=>600,'org_email'=>200,'org_same_as'=>2000,'llms_intro'=>1500,'code_head'=>20000,'code_body'=>20000,'code_footer'=>20000,'code_domains'=>1000] as $k=>$max){$v=trim(str_replace("\r",'',(string)($_POST[$k]??'')));if(strlen($v)>$max)throw new RuntimeException('A field is too long.');$vals[$k]=$v;}
@@ -259,7 +312,7 @@ if($me&&$view==='clicks'&&isset($_GET['export'])){
  exit;
 }
 if($logged&&!$me){unset($_SESSION['admin']);$logged=false;}
-$titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','clicks'=>'Clicks','appearance'=>'Appearance','seo'=>'SEO & Code','users'=>'Users','settings'=>'Settings'];
+$titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','clicks'=>'Clicks','search'=>'Search Console','authors'=>'Authors','appearance'=>'Appearance','seo'=>'SEO & Code','users'=>'Users','settings'=>'Settings'];
 if(!isset($titles[$view]))$view='dashboard';
 ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($logged?$titles[$view]:'Log in') ?> ‹ <?= e(setting('site_name')) ?></title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="<?= e(asset('/assets/admin.css')) ?>"><script src="<?= e(asset('/assets/admin.js')) ?>" defer></script></head>
 <body class="<?= $logged?'cms':'cms-login' ?>">
@@ -283,7 +336,7 @@ if(!isset($titles[$view]))$view='dashboard';
  $now=now();
  $count=fn(string $where)=>(int)db()->query("SELECT COUNT(*) FROM reviews r WHERE $where")->fetchColumn();
  $counts=['all'=>$count("r.status!='trash'"),'published'=>$count(live()),'scheduled'=>$count("r.status='published' AND r.published_at>'$now'"),'draft'=>$count("r.status='draft'"),'trash'=>$count("r.status='trash'")];
- $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'clicks'=>['Clicks','chart'],'appearance'=>['Appearance','image'],'seo'=>['SEO &amp; Code','code'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
+ $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'clicks'=>['Clicks','chart'],'search'=>['Search Console','search'],'authors'=>['Authors','users'],'appearance'=>['Appearance','image'],'seo'=>['SEO &amp; Code','code'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
 ?>
 <header class="cms-top">
  <button type="button" class="cms-menu" data-side-toggle aria-label="Toggle menu"><?= aicon('menu') ?></button>
@@ -372,12 +425,12 @@ if(!isset($titles[$view]))$view='dashboard';
     <?php if($state==='trash'): ?>
      <button form="row-<?= $r['id'] ?>-restore"><?= aicon('clock') ?> Restore</button><button class="danger" form="row-<?= $r['id'] ?>-delete"><?= aicon('trash') ?> Delete Permanently</button>
     <?php else: ?>
-     <a href="/admin.php?view=edit&id=<?= $r['id'] ?>"><?= aicon('pen') ?> Edit</a><a href="<?= e($view_url) ?>" target="_blank"><?= aicon('right') ?> <?= $state==='published'?'View':'Preview' ?></a><button form="row-<?= $r['id'] ?>-dup"><?= aicon('file') ?> Duplicate</button><button class="danger" form="row-<?= $r['id'] ?>-trash"><?= aicon('trash') ?> Move to Trash</button>
+     <a href="/admin.php?view=edit&id=<?= $r['id'] ?>"><?= aicon('pen') ?> Edit</a><a href="<?= e($view_url) ?>" target="_blank"><?= aicon('right') ?> <?= $state==='published'?'View':'Preview' ?></a><button form="row-<?= $r['id'] ?>-dup"><?= aicon('file') ?> Duplicate</button><?php if($state==='published'&&pinterestToken()!==''): ?><button form="row-<?= $r['id'] ?>-pin"><?= aicon('send') ?> <?= pinnedAlready((int)$r['id'])?'Pin again':'Pin to Pinterest' ?></button><?php endif ?><button class="danger" form="row-<?= $r['id'] ?>-trash"><?= aicon('trash') ?> Move to Trash</button>
     <?php endif ?></div></details></td></tr>
  <?php endforeach ?>
  <?php if(!$rows): ?><tr><td colspan="7" class="muted empty">No posts found.</td></tr><?php endif ?>
  </tbody></table></div></form>
- <?php foreach($rows as $r): foreach(['restore'=>'post_status','delete'=>'post_status','trash'=>'post_status','dup'=>'duplicate'] as $k=>$act): ?><form id="row-<?= $r['id'] ?>-<?= $k ?>" method="post" class="hidden" <?= $k==='delete'?'data-confirm="Delete this post permanently? This cannot be undone."':'' ?>><?= csrfField() ?><input type="hidden" name="action" value="<?= $act ?>"><input type="hidden" name="do" value="<?= $k ?>"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="return" value="<?= e($self) ?>"></form><?php endforeach;endforeach ?>
+ <?php foreach($rows as $r): foreach(['restore'=>'post_status','delete'=>'post_status','trash'=>'post_status','dup'=>'duplicate','pin'=>'pin_post'] as $k=>$act): ?><form id="row-<?= $r['id'] ?>-<?= $k ?>" method="post" class="hidden" <?= $k==='delete'?'data-confirm="Delete this post permanently? This cannot be undone."':'' ?>><?= csrfField() ?><input type="hidden" name="action" value="<?= $act ?>"><input type="hidden" name="do" value="<?= $k ?>"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="return" value="<?= e($self) ?>"></form><?php endforeach;endforeach ?>
  <div class="table-foot"><span class="muted"><?= $total?'Showing '.(($page-1)*PER_PAGE+1).' to '.min($total,$page*PER_PAGE).' of '.$total.' items':'' ?></span>
  <?php if($pages>1): $from=max(1,min($page-2,$pages-4));$to=min($pages,$from+4); ?><nav class="pagination" aria-label="Pages">
   <a class="<?= $page===1?'disabled':'' ?>" href="<?= e($q(['p'=>null])) ?>" aria-label="First page">«</a><a class="<?= $page===1?'disabled':'' ?>" href="<?= e($q(['p'=>max(1,$page-1)])) ?>" aria-label="Previous page">‹</a>
@@ -388,7 +441,7 @@ if(!isset($titles[$view]))$view='dashboard';
 
 <?php elseif($view==='edit'):
  $id=(int)($_GET['id']??0);
- $r=$id?(query('SELECT * FROM reviews WHERE id=?',[$id])[0]??null):['id'=>0,'title'=>'','slug'=>'','category_id'=>'','excerpt'=>'','body'=>'','image'=>'','score'=>'0','pros'=>'','cons'=>'','verdict'=>'','author'=>'Editorial team','status'=>'draft','featured'=>0,'demo'=>0,'meta_title'=>'','meta_description'=>'','brand'=>'','brand_about'=>'','cta_url'=>'','focus_keyword'=>'','seo_canonical'=>'','seo_robots'=>'','og_image'=>'','schema_type'=>'','tldr'=>'','takeaways'=>'','custom_schema'=>'','published_at'=>''];
+ $r=$id?(query('SELECT * FROM reviews WHERE id=?',[$id])[0]??null):['id'=>0,'title'=>mb_substr(trim((string)($_GET['title']??'')),0,200),'slug'=>'','category_id'=>'','excerpt'=>'','body'=>'','image'=>'','score'=>'0','pros'=>'','cons'=>'','verdict'=>'','author'=>'Editorial team','status'=>'draft','featured'=>0,'demo'=>0,'meta_title'=>'','meta_description'=>'','brand'=>'','brand_about'=>'','cta_url'=>'','focus_keyword'=>mb_strtolower(mb_substr(trim((string)($_GET['title']??'')),0,100)),'seo_canonical'=>'','seo_robots'=>'','og_image'=>'','schema_type'=>'','tldr'=>'','takeaways'=>'','custom_schema'=>'','published_at'=>''];
  if($r&&$error&&($_POST['action']??'')==='save_post')$r=array_merge($r,array_intersect_key($_POST,$r),['featured'=>isset($_POST['featured']),'demo'=>isset($_POST['demo'])]);
  if(!$r): ?><p class="notice notice-error">Post not found.</p><?php else: $state=$id?postState($r):'new'; ?>
  <section class="panel"><?= pageHead('pen',$id?'Edit Post':'Add New Post',$id?'Update the content, settings and SEO of this post.':'Write something new. Save it as a draft or publish when ready.',$id?'<a class="button button-outline" href="/admin.php?view=posts">'.aicon('file').' All Posts</a><a class="button button-primary" href="/admin.php?view=edit">'.aicon('plus').' Add New</a>':'<a class="button button-outline" href="/admin.php?view=posts">'.aicon('file').' All Posts</a>') ?>
@@ -457,7 +510,7 @@ if(!isset($titles[$view]))$view='dashboard';
     <details class="library"><summary>Choose from Media Library</summary><div class="library-grid"><?php foreach(libraryImages() as $img): ?><label><input type="radio" name="image_pick" value="<?= e($img) ?>" <?= $img===$r['image']?'checked':'' ?>><img src="<?= e($img) ?>" alt="" loading="lazy"></label><?php endforeach ?></div></details>
     <label>Or image URL<input class="input input-sm" name="image" value="<?= e($r['image']) ?>" placeholder="https://… or /uploads/…" data-image-url></label>
    </section>
-   <section class="box"><h2 class="box-title"><?= aicon('user','icon title-icon') ?> Author</h2><input class="input input-sm" name="author" value="<?= e($r['author']) ?>" aria-label="Author"></section>
+   <section class="box"><h2 class="box-title"><?= aicon('user','icon title-icon') ?> Author</h2><input class="input input-sm" name="author" value="<?= e($r['author']) ?>" aria-label="Author" list="author-list"><datalist id="author-list"><?php foreach(query('SELECT name FROM authors ORDER BY name') as $a): ?><option value="<?= e($a['name']) ?>"><?php endforeach ?></datalist><p class="hint"><?= authorByName((string)$r['author'])?'Linked to the author profile.':'<a href="/admin.php?view=authors">Add an author profile</a> to show a photo and bio.' ?></p></section>
   </aside>
  </form>
  <?php if($id): ?><form id="trash-post" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="post_status"><input type="hidden" name="do" value="trash"><input type="hidden" name="id" value="<?= $id ?>"><input type="hidden" name="return" value="/admin.php?view=posts"></form><?php endif ?>
@@ -487,13 +540,95 @@ if(!isset($titles[$view]))$view='dashboard';
    <div><button class="button button-primary"><?= aicon('plus') ?> Add New Category</button></div></form>
   <div class="table-wrap"><table class="list-table"><thead><tr><th>Name</th><th>Icon</th><th>Slug</th><th>Posts</th><th class="kebab-col"><span class="sr-only">Actions</span></th></tr></thead><tbody>
    <?php foreach(categories() as $c): ?><tr>
-    <td><div class="title-cell"><span class="cat-icon chip-<?= ['teal','violet','green','rose','amber','blue'][(int)$c['id']%6] ?>"><?= aicon('folder') ?></span><form method="post" class="inline-form" id="cat-<?= $c['id'] ?>"><?= csrfField() ?><input type="hidden" name="action" value="save_category"><input type="hidden" name="id" value="<?= $c['id'] ?>"><input class="input input-sm" name="name" value="<?= e($c['name']) ?>" required aria-label="Category name"></form></div></td>
+    <td><div class="title-cell"><span class="cat-icon chip-<?= ['teal','violet','green','rose','amber','blue'][(int)$c['id']%6] ?>"><?= aicon('folder') ?></span><form method="post" class="inline-form" id="cat-<?= $c['id'] ?>"><?= csrfField() ?><input type="hidden" name="action" value="save_category"><input type="hidden" name="id" value="<?= $c['id'] ?>"><input class="input input-sm" name="name" value="<?= e($c['name']) ?>" required aria-label="Category name"></form><details class="hub-intro"><summary>Hub introduction<?= trim((string)($c['intro']??''))!==''?' ✓':'' ?></summary><textarea class="input" name="intro" form="cat-<?= $c['id'] ?>" rows="5" maxlength="8000" placeholder="2–4 paragraphs shown at the top of /category/<?= e($c['slug']) ?>: what this topic covers, how to choose, where to start. Markdown allowed."><?= e($c['intro']??'') ?></textarea><span class="hint">Saved with the row’s Save button.</span></details></div></td>
     <td><select class="input input-sm" name="icon" form="cat-<?= $c['id'] ?>" aria-label="Icon"><?php foreach(['grid','tech','shopping','travel','gadgets','home'] as $i): ?><option <?= $c['icon']===$i?'selected':'' ?>><?= $i ?></option><?php endforeach ?></select></td>
     <td class="muted"><code><?= e($c['slug']) ?></code></td><td><a class="chip chip-<?= ['teal','violet','green','rose','amber','blue'][(int)$c['id']%6] ?>" href="/admin.php?view=posts&cat=<?= $c['id'] ?>"><?= (int)$c['total'] ?> post<?= (int)$c['total']===1?'':'s' ?></a></td>
     <td class="nowrap"><div class="row-buttons"><button class="button button-outline button-sm" form="cat-<?= $c['id'] ?>">Save</button><form method="post" class="inline-form" data-confirm="Delete this category?"><?= csrfField() ?><input type="hidden" name="action" value="delete_category"><input type="hidden" name="id" value="<?= $c['id'] ?>"><button class="icon-danger" title="Delete category" aria-label="Delete <?= e($c['name']) ?>"><?= aicon('trash') ?></button></form></div></td></tr>
    <?php endforeach ?></tbody></table></div>
  </div></section>
 
+<?php elseif($view==='search'):
+ $days=in_array((int)($_GET['days']??28),[7,28,90],true)?(int)($_GET['days']??28):28;
+ $end=date('Y-m-d',strtotime('-2 days'));$start=date('Y-m-d',strtotime("$end -".($days-1).' days'));
+ $pend=date('Y-m-d',strtotime("$start -1 day"));$pstart=date('Y-m-d',strtotime("$pend -".($days-1).' days'));
+ $connected=gscKey()&&setting('gsc_property')!=='';$gscError=null;$refresh=isset($_GET['refresh']);
+ if($connected){try{
+  $tot=gscQuery([],$start,$end,1,$refresh)[0]??null;$prev=gscQuery([],$pstart,$pend,1,$refresh)[0]??null;
+  $queries=gscQuery(['query'],$start,$end,1000,$refresh);$pages=gscQuery(['page'],$start,$end,500,$refresh);$qp=gscQuery(['query','page'],$start,$end,5000,$refresh);
+ }catch(Throwable $ex){$gscError=$ex->getMessage();}}
+ $fmtN=fn($n)=>$n>=1000?number_format($n/1000,1).'k':number_format($n);
+ $delta=fn($a,$b,$inv=false)=>$b?(($d=($a-$b)/$b*100)>=0.5||$d<=-0.5?'<span class="delta '.((($d>0)!==$inv)?'up':'down').'">'.($d>0?'+':'').round($d).'%</span>':''):'';
+ $editLink=function(string $url){$p=postForUrl($url);return $p?'<a href="/admin.php?view=edit&id='.$p['id'].'">'.e(mb_strimwidth($p['title'],0,60,'…')).'</a>':'<a href="'.e($url).'" target="_blank">'.e((string)parse_url($url,PHP_URL_PATH)).'</a>';}; ?>
+ <section class="panel"><?= pageHead('search','Search Console','Your Google rankings: keywords, positions, clicks and where the quick wins are.',$connected?'<div class="seg-tabs">'.implode('',array_map(fn($d)=>'<a class="'.($d===$days?'active':'').'" href="/admin.php?view=search&days='.$d.'">'.$d.' days</a>',[7,28,90])).'</div><a class="button button-outline" href="/admin.php?view=search&days='.$days.'&refresh=1">'.aicon('clock').' Refresh</a>':'') ?>
+ <?php if($gscError): ?><p class="notice notice-error"><?= e($gscError) ?></p><?php endif ?>
+ <?php if($connected&&!$gscError): ?>
+  <?php if($tot===null): ?><p class="notice">No Search Console data for <?= e($start) ?> – <?= e($end) ?> yet. New sites can take a few days to show data.</p><?php else: ?>
+  <div class="glance glance-4"><?php foreach([['Clicks',$fmtN($tot['clicks']),$delta($tot['clicks'],$prev['clicks']??0),'teal','chart'],['Impressions',$fmtN($tot['impressions']),$delta($tot['impressions'],$prev['impressions']??0),'blue','search'],['Avg. CTR',round($tot['ctr']*100,1).'%',$delta($tot['ctr'],$prev['ctr']??0),'violet','check'],['Avg. position',number_format($tot['position'],1),$delta($tot['position'],$prev['position']??0,true),'amber','trophy']] as [$l,$v,$d,$tone,$ic]): ?><div class="tile tile-<?= $tone ?>"><span class="tile-icon"><?= aicon($ic) ?></span><span><b class="tile-num"><?= $v ?> <?= $d ?></b><span class="tile-label"><?= $l ?> · vs previous <?= $days ?> days</span></span></div><?php endforeach ?></div>
+  <?php endif ?>
+  <?php
+   // Quick wins: page 1–2 positions with real demand — improving these pages moves traffic fastest.
+   $opps=array_values(array_filter($qp,fn($r)=>$r['position']>=4.5&&$r['position']<=20&&$r['impressions']>=10));usort($opps,fn($a,$b)=>$b['impressions']<=>$a['impressions']);
+   // Titles that underperform: good position, clicks well below the usual rate for that position.
+   $ctrLow=array_values(array_filter($qp,fn($r)=>$r['position']<=10&&$r['impressions']>=30&&$r['ctr']<expectedCtr($r['position'])*0.6));usort($ctrLow,fn($a,$b)=>$b['impressions']<=>$a['impressions']);
+   // Keywords nobody targets yet: queries with impressions whose page doesn't use them as focus keyword.
+   $focus=array_map('mb_strtolower',array_column(query("SELECT focus_keyword FROM reviews WHERE focus_keyword!=''"),'focus_keyword'));
+   $newTopics=array_values(array_filter($queries,fn($r)=>$r['position']>20&&$r['impressions']>=5&&!in_array(mb_strtolower($r['keys'][0]),$focus,true)));usort($newTopics,fn($a,$b)=>$b['impressions']<=>$a['impressions']);
+   $table=function(string $title,string $hint,array $rows,array $cols){ ?>
+    <section class="box gsc-box"><h2 class="box-title"><?= $title ?></h2><p class="hint"><?= $hint ?></p>
+    <?php if(!$rows): ?><p class="muted">Nothing here for this period.</p><?php else: ?><div class="table-wrap"><table class="list-table gsc-table"><thead><tr><?php foreach($cols as $c=>$fn): ?><th><?= $c ?></th><?php endforeach ?></tr></thead><tbody>
+    <?php foreach(array_slice($rows,0,25) as $r): ?><tr><?php foreach($cols as $fn): ?><td><?= $fn($r) ?></td><?php endforeach ?></tr><?php endforeach ?></tbody></table></div><?php endif ?></section>
+   <?php };
+   $pos=fn($r)=>'<b class="pos '.($r['position']<=3?'pos-top':($r['position']<=10?'pos-p1':'pos-p2')).'">'.number_format($r['position'],1).'</b>';
+   $table(aicon('trophy','icon title-icon').' Quick wins: positions 5–20','These keywords already rank on page 1–2. Improve the page (add the keyword to a heading, expand the section, add FAQs, internal links) to move into the top 3.',$opps,['Keyword'=>fn($r)=>e($r['keys'][0]),'Page'=>fn($r)=>$editLink($r['keys'][1]),'Position'=>$pos,'Impressions'=>fn($r)=>number_format($r['impressions']),'Clicks'=>fn($r)=>number_format($r['clicks'])]);
+   $table(aicon('pen','icon title-icon').' Low click-through: rewrite the title & description','Google shows these pages high up, but fewer people click than usual for that position. A clearer, more specific SEO title and meta description can double the clicks.',$ctrLow,['Keyword'=>fn($r)=>e($r['keys'][0]),'Page'=>fn($r)=>$editLink($r['keys'][1]),'Position'=>$pos,'CTR'=>fn($r)=>round($r['ctr']*100,1).'%','Expected'=>fn($r)=>'≈'.round(expectedCtr($r['position'])*100).'%']);
+   $table(aicon('search','icon title-icon').' Top keywords','The searches that bring visitors now.',$queries,['Keyword'=>fn($r)=>e($r['keys'][0]),'Clicks'=>fn($r)=>number_format($r['clicks']),'Impressions'=>fn($r)=>number_format($r['impressions']),'CTR'=>fn($r)=>round($r['ctr']*100,1).'%','Position'=>$pos]);
+   $table(aicon('file','icon title-icon').' Top pages','Which articles earn the most search traffic.',$pages,['Page'=>fn($r)=>$editLink($r['keys'][0]),'Clicks'=>fn($r)=>number_format($r['clicks']),'Impressions'=>fn($r)=>number_format($r['impressions']),'CTR'=>fn($r)=>round($r['ctr']*100,1).'%','Position'=>$pos]);
+   $table(aicon('plus','icon title-icon').' New article ideas','Searches you appear for (beyond page 2) that no article targets as its focus keyword yet: good topics for new posts.',$newTopics,['Keyword'=>fn($r)=>e($r['keys'][0]),'Impressions'=>fn($r)=>number_format($r['impressions']),'Position'=>$pos,''=>fn($r)=>'<a class="button button-outline button-sm" href="/admin.php?view=edit&amp;title='.rawurlencode(ucfirst($r['keys'][0])).'">Write</a>']);
+  ?>
+ <?php endif ?>
+ <details class="box" <?= $connected?'':'open' ?>><summary class="box-title"><?= aicon('gear','icon title-icon') ?> Connection <?= $connected?'<span class="chip chip-green">Connected'.(($k=gscKey())?' as '.e($k['client_email']):'').'</span>':'' ?></summary>
+  <form method="post" class="stack"><?= csrfField() ?><input type="hidden" name="action" value="gsc_settings">
+   <ol class="setup-steps"><li>In <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud</a>, create a project and enable the <b>Google Search Console API</b>.</li><li>Create a <b>service account</b> → Keys → Add key → JSON, and download it.</li><li>In <a href="https://search.google.com/search-console" target="_blank" rel="noopener">Search Console</a> → Settings → Users and permissions → Add user: the service account e-mail, permission <b>Restricted</b>.</li><li>Paste the property and the JSON key below.</li></ol>
+   <label>Property<input class="input" name="gsc_property" value="<?= e(setting('gsc_property')) ?>" placeholder="sc-domain:besttop10things.com  or  https://www.besttop10things.com/"></label>
+   <label>Service account JSON key <span class="muted"><?= gscKey()?'(saved — paste a new key only to replace it)':'' ?></span><textarea class="input code-input" name="gsc_key" rows="5" spellcheck="false" placeholder='{"type": "service_account", ...}'></textarea></label>
+   <p class="hint">The key is stored outside the website folder and is never shown again. Access is read-only.</p>
+   <div class="row-buttons"><button class="button button-primary"><?= aicon('send') ?> Save</button><?php if(gscKey()): ?><button class="button button-outline" name="gsc_disconnect" value="1">Disconnect</button><?php endif ?></div>
+  </form></details>
+ </section>
+<?php elseif($view==='authors'): $aid=(int)($_GET['id']??0); $editA=$aid?(query('SELECT * FROM authors WHERE id=?',[$aid])[0]??null):null;
+ $formA=$error&&($_POST['action']??'')==='save_author'?array_merge(['id'=>$aid,'avatar'=>''],array_intersect_key($_POST,array_flip(['name','slug','role','bio','avatar','expertise','links']))):($editA??['id'=>0,'name'=>'','slug'=>'','role'=>'','bio'=>'','avatar'=>'','expertise'=>'','links'=>'']);
+ $acounts=[];foreach(query("SELECT lower(author) AS a,COUNT(*) AS n FROM reviews WHERE status!='trash' GROUP BY lower(author)") as $x)$acounts[$x["a"]]=(int)$x["n"]; ?>
+ <section class="panel"><?= pageHead('users','Authors','Author profiles build trust with readers and Google (E-E-A-T). A post links to a profile when its Author field matches the name.') ?>
+ <div class="two-col">
+  <section class="box"><h2 class="box-title"><?= aicon($formA['id']?'pen':'plus','icon title-icon') ?> <?= $formA['id']?'Edit author':'Add author' ?></h2>
+   <form method="post" enctype="multipart/form-data" class="stack"><?= csrfField() ?><input type="hidden" name="action" value="save_author"><input type="hidden" name="id" value="<?= (int)$formA['id'] ?>">
+    <label>Name<input class="input" name="name" value="<?= e($formA['name']) ?>" required maxlength="80" placeholder="e.g. Naveen Prajapati"></label>
+    <label>Role / title<input class="input" name="role" value="<?= e($formA['role']) ?>" maxlength="120" placeholder="e.g. Senior Tech Editor"></label>
+    <label>Bio<textarea class="input" name="bio" rows="5" maxlength="3000" placeholder="Experience, what you test, why readers can trust you."><?= e($formA['bio']) ?></textarea></label>
+    <label>Expertise <span class="muted">(comma separated)</span><input class="input" name="expertise" value="<?= e($formA['expertise']) ?>" maxlength="300" placeholder="Laptops, Travel gear, Web hosting"></label>
+    <label>Profile links <span class="muted">(one https:// per line: LinkedIn, X, Instagram…)</span><textarea class="input" name="links" rows="3" maxlength="2000"><?= e($formA['links']) ?></textarea></label>
+    <?php if($formA['avatar']!==''&&safeImage($formA['avatar'])): ?><img class="feat-preview author-preview" src="<?= e($formA['avatar']) ?>" alt=""><?php endif ?>
+    <label>Photo<input class="input input-sm" type="file" name="avatar_upload" accept="image/jpeg,image/png,image/webp"></label>
+    <label>Or photo URL<input class="input input-sm" name="avatar" value="<?= e($formA['avatar']) ?>" placeholder="/uploads/… or https://…"></label>
+    <label>Profile URL<input class="input input-sm" name="slug" value="<?= e($formA['slug']) ?>" placeholder="auto from the name"></label>
+    <div class="row-buttons"><button class="button button-primary"><?= aicon('send') ?> Save author</button><?php if($formA['id']): ?><a class="button button-outline" href="/admin.php?view=authors">Cancel</a><?php endif ?></div>
+   </form>
+  </section>
+  <div class="table-wrap"><table class="list-table"><thead><tr><th>Author</th><th>Posts</th><th class="kebab-col"><span class="sr-only">Actions</span></th></tr></thead><tbody>
+   <?php foreach(query('SELECT * FROM authors ORDER BY name') as $a): ?><tr><td><div class="title-cell"><?php if($a['avatar']!==''&&safeImage($a['avatar'])): ?><img class="thumb thumb-round" src="<?= e($a['avatar']) ?>" alt=""><?php else: ?><span class="avatar avatar-letter"><?= e(mb_strtoupper(mb_substr($a['name'],0,1))) ?></span><?php endif ?><div><a class="row-title" href="/admin.php?view=authors&id=<?= $a['id'] ?>"><?= e($a['name']) ?></a><br><span class="muted"><?= e($a['role']) ?></span></div></div></td>
+    <td><?= $acounts[mb_strtolower($a["name"])]??0 ?></td>
+    <td class="nowrap"><div class="row-buttons"><a class="button button-outline button-sm" href="<?= e(authorUrl($a)) ?>" target="_blank">View</a><form method="post" class="inline-form" data-confirm="Delete this author profile? Posts keep the name."><?= csrfField() ?><input type="hidden" name="action" value="delete_author"><input type="hidden" name="id" value="<?= $a['id'] ?>"><button class="button button-outline button-sm">Delete</button></form></div></td></tr><?php endforeach ?>
+   <?php if(!query('SELECT 1 FROM authors LIMIT 1')): ?><tr><td colspan="3" class="muted empty">No author profiles yet. Add the people who write and review for the site.</td></tr><?php endif ?>
+   <?php $unlinked=array_filter(query("SELECT author,COUNT(*) AS n FROM reviews WHERE status!='trash' GROUP BY lower(author)"),fn($x)=>!authorByName((string)$x['author'])); if($unlinked): ?><tr><td colspan="3" class="muted">Names on posts without a profile: <?= e(implode(', ',array_map(fn($x)=>$x['author'].' ('.$x['n'].')',$unlinked))) ?></td></tr><?php endif ?>
+  </tbody></table></div>
+ </div>
+ <section class="box" id="methodology"><h2 class="box-title"><?= aicon('file','icon title-icon') ?> “How we review” page <a class="muted" href="/how-we-review" target="_blank">/how-we-review</a></h2>
+  <form method="post" class="stack"><?= csrfField() ?><input type="hidden" name="action" value="save_methodology">
+   <textarea class="input code-input" name="methodology" rows="16"><?= e(trim(setting('methodology'))?:DEFAULT_METHODOLOGY) ?></textarea>
+   <p class="hint">Markdown: <code>## heading</code>, <code>- list</code>, <code>**bold**</code>. Explain your research process, scoring scale and affiliate policy honestly.</p>
+   <div><button class="button button-primary"><?= aicon('send') ?> Save page</button></div>
+  </form></section>
+ </section>
 <?php elseif($view==='appearance'): $images=libraryImages();
  // After a failed save, show what was submitted rather than the stored menu.
  $menuRows=$error&&($_POST['action']??'')==='appearance'?array_map(fn($l,$u,$t)=>['label'=>(string)$l,'url'=>(string)$u,'type'=>(string)$t],(array)($_POST['menu_label']??[]),(array)($_POST['menu_url']??[]),(array)($_POST['menu_type']??[])):siteMenu(); ?>
@@ -662,6 +797,20 @@ if(!isset($titles[$view]))$view='dashboard';
     <p class="hint">For Google: submit <code><?= e($base) ?>/sitemap.xml</code> in Search Console → Sitemaps, and use URL Inspection → Request indexing for new posts.</p>
    </div></section>
   </div>
+  <section class="box" id="pinterest"><h2 class="box-title"><?= aicon('send','icon title-icon') ?> Pinterest auto-posting</h2><div class="stack">
+   <?php $boards=json_decode(setting('pinterest_boards'),true)?:[]; if(pinterestToken()!==''): ?><p><b class="chip chip-green">Connected</b> <?= count($boards) ?> board<?= count($boards)===1?'':'s' ?><?php if(setting('pinterest_board')!==''&&isset($boards[setting('pinterest_board')])): ?> · pinning to <b><?= e($boards[setting('pinterest_board')]) ?></b><?php endif ?></p><?php endif ?>
+   <label>Access token <span class="muted">(developers.pinterest.com → your app → generate token with boards:read, pins:read, pins:write)</span><input class="input" type="password" name="pinterest_token" form="pinterest-form" autocomplete="off" placeholder="<?= pinterestToken()!==''?'•••••••• saved (paste a new one to replace)':'pina_…' ?>"></label>
+   <?php if($boards): ?><label>Board<select class="input" name="pinterest_board" form="pinterest-form"><?php foreach($boards as $id=>$name): ?><option value="<?= e($id) ?>" <?= setting('pinterest_board')===(string)$id?'selected':'' ?>><?= e($name) ?></option><?php endforeach ?></select></label><?php endif ?>
+   <label class="check-row"><input type="checkbox" name="pinterest_auto" value="1" form="pinterest-form" <?= setting('pinterest_auto')==='1'?'checked':'' ?>> Pin automatically when a post is published</label>
+   <p class="hint">Each post gets a 1000×1500 pin image with its title, linking back to the article. Scheduled posts are pinned by <code>scripts/social-cron.php</code> (run it hourly with cron). You can also pin any post from Posts › ⋯ › Pin to Pinterest.</p>
+   <div class="row-buttons"><button class="button button-primary" form="pinterest-form"><?= aicon('send') ?> <?= pinterestToken()!==''?'Save &amp; refresh boards':'Connect Pinterest' ?></button><?php if(pinterestToken()!==''): ?><button class="button button-outline" form="pinterest-form" name="disconnect" value="1">Disconnect</button><?php endif ?></div>
+   <?php $log=query("SELECT s.*,r.title FROM social_posts s LEFT JOIN reviews r ON r.id=s.post_id ORDER BY s.id DESC LIMIT 5"); if($log): ?><p class="lbl">Recent</p><ul class="check-list"><?php foreach($log as $l): ?><li class="<?= $l['status']==='ok'?'pass':'' ?>"><?= e(date('M j, g:i a',strtotime($l['created_at']))) ?> · <?= e($l['title']??'#'.$l['post_id']) ?><?= $l['status']==='ok'?'':' — '.e($l['message']) ?></li><?php endforeach ?></ul><?php endif ?>
+  </div></section>
+  <section class="box"><h2 class="box-title"><?= aicon('chart','icon title-icon') ?> Facebook, Instagram, X, LinkedIn</h2><div class="stack">
+   <p>Connect your RSS feed once to an automation tool and every new post is shared automatically, with its 1200×630 image:</p>
+   <p><input class="input" value="<?= e(siteBase()) ?>/feed.xml" readonly data-copy></p>
+   <p class="hint"><b>Buffer</b> (Settings › RSS feeds), <b>Zapier</b> (RSS by Zapier → Facebook Pages / LinkedIn / X) or <b>IFTTT</b> (RSS feed → new item). Those platforms only allow automatic posting through approved apps like these.</p>
+  </div></section>
   <section class="box"><h2 class="box-title"><?= aicon('code','icon title-icon') ?> Custom code</h2><div class="stack">
    <label>Header code <span class="muted">(inside &lt;head&gt; on every page: meta tags, pixels, tag managers)</span><textarea class="input code-input" name="code_head" rows="6" spellcheck="false"><?= $f('code_head') ?></textarea></label>
    <label>Body code <span class="muted">(right after &lt;body&gt;: e.g. Google Tag Manager noscript)</span><textarea class="input code-input" name="code_body" rows="4" spellcheck="false"><?= $f('code_body') ?></textarea></label>
@@ -671,6 +820,7 @@ if(!isset($titles[$view]))$view='dashboard';
   </div></section>
   <div class="save-bar"><button class="button button-primary button-lg"><?= aicon('send') ?> Save SEO settings</button></div>
  </form>
+ <form id="pinterest-form" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="pinterest"></form>
  <form id="indexnow-all" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="indexnow_all"></form>
  </section>
 <?php elseif($view==='settings'): ?>

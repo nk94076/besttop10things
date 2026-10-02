@@ -26,7 +26,7 @@ try{
   if($id=query('SELECT id FROM reviews WHERE slug=?',[$slug])[0]['id']??null){
    run('UPDATE reviews SET category_id=?,title=?,excerpt=?,body=?,image=?,score=?,pros=?,cons=?,verdict=?,author=?,status=?,demo=0,updated_at=? WHERE id=?',[...$fields,$now,$id]);$updated++;
   }else{
-   run('INSERT INTO reviews(category_id,title,excerpt,body,image,score,pros,cons,verdict,author,status,slug,featured,demo,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?)',[...$fields,$slug,$now,$now]);$added++;
+   run('INSERT INTO reviews(category_id,title,excerpt,body,image,score,pros,cons,verdict,author,status,slug,featured,demo,created_at,updated_at,published_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?)',[...$fields,$slug,$now,$now,now()]);$added++;
   }
  }
  if($hideSamples) run('UPDATE reviews SET status="draft" WHERE demo=1');

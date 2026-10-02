@@ -182,3 +182,6 @@ if (appearance) {
   seo.addEventListener('input', count);
   count();
 }
+
+// Clicks: size the breakdown bars (inline styles are blocked by the CSP, CSSOM is not)
+document.querySelectorAll('[data-w]').forEach(bar => { bar.style.width = Math.max(2, Number(bar.dataset.w)) + '%'; });

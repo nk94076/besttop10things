@@ -41,6 +41,22 @@ function aicon(string $name, string $class='icon'): string {
 function pageHead(string $icon, string $title, string $sub, string $actions=''): string {
  return '<div class="page-head panel-head"><div class="head-with-icon"><span class="head-icon">'.aicon($icon).'</span><div><h1 class="page-title">'.e($title).'</h1><p class="page-sub">'.e($sub).'</p></div></div>'.($actions?'<div class="head-actions">'.$actions.'</div>':'').'</div>';
 }
+// Filters for the Clicks screen, read from the query string. Returns [SQL where, params, values].
+function clickFilters(): array {
+ $f=['from'=>(string)($_GET['from']??date('Y-m-d',strtotime('-29 days'))),'to'=>(string)($_GET['to']??date('Y-m-d')),'post'=>(int)($_GET['post']??0),'link'=>(int)($_GET['link']??0),'source'=>trim((string)($_GET['source']??'')),'device'=>trim((string)($_GET['device']??'')),'placement'=>trim((string)($_GET['placement']??'')),'country'=>trim((string)($_GET['country']??'')),'q'=>trim((string)($_GET['q']??'')),'bots'=>!empty($_GET['bots']),'admins'=>!empty($_GET['admins'])];
+ foreach(['from','to'] as $k)if(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$f[$k]))$f[$k]=$k==='from'?date('Y-m-d',strtotime('-29 days')):date('Y-m-d');
+ $w=['k.created_at>=?','k.created_at<?'];$p=[$f['from'],date('Y-m-d',strtotime($f['to'].' +1 day'))];
+ if(!$f['bots'])$w[]='k.is_bot=0';
+ if(!$f['admins'])$w[]='k.is_admin=0';
+ foreach(['post'=>'k.post_id','link'=>'k.link_id'] as $k=>$col)if($f[$k]){$w[]="$col=?";$p[]=$f[$k];}
+ foreach(['source'=>'k.source','device'=>'k.device','placement'=>'k.placement','country'=>'k.country'] as $k=>$col)if($f[$k]!==''){$w[]="$col=?";$p[]=$f[$k];}
+ if($f['q']!==''){$w[]='(l.url LIKE ? OR k.visitor=? OR k.ip=? OR k.anchor LIKE ? OR k.referrer LIKE ?)';array_push($p,"%{$f['q']}%",$f['q'],$f['q'],"%{$f['q']}%","%{$f['q']}%");}
+ return [implode(' AND ',$w),$p,$f];
+}
+function clickUrl(array $f, array $over=[]): string {
+ $q=array_merge($f,$over);$q['bots']=$q['bots']?1:null;$q['admins']=$q['admins']?1:null;
+ return '/admin.php?'.http_build_query(array_filter(['view'=>'clicks']+$q,fn($v)=>$v!==null&&$v!==''&&$v!==0));
+}
 function imageInUse(string $url): bool { return (bool)query('SELECT id FROM reviews WHERE image=? OR instr(body,?)>0 LIMIT 1',[$url,$url]); }
 function savePost(array $in, int $id): int {
  $title=trim((string)($in['title']??''));
@@ -190,6 +206,12 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    foreach(['seo_title'=>200,'meta_keywords'=>500,'google_verification'=>200] as $k=>$max){$v=trim((string)($_POST[$k]??''));if(strlen($v)>$max)throw new RuntimeException('An SEO field is too long.');$save($k,$v);}
    flash('Appearance saved.','/admin.php?view=appearance');
   }
+  if($action==='tracking'){
+   $param=trim((string)($_POST['subid_param']??''));
+   if($param!==''&&!preg_match('/^[A-Za-z0-9_]{1,30}$/',$param))throw new RuntimeException('The parameter name can only use letters, numbers and _ (e.g. subId1).');
+   run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['subid_param',$param]);
+   flash('Tracking settings saved.','/admin.php?view=clicks');
+  }
   if($action==='password'){
    $user=query('SELECT * FROM admins WHERE id=?',[$_SESSION['admin']])[0];
    if(!password_verify((string)($_POST['current_password']??''),$user['password']))throw new RuntimeException('Current password is incorrect.');
@@ -201,8 +223,16 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 }
 
 $me=$logged?(query('SELECT * FROM admins WHERE id=?',[$_SESSION['admin']])[0]??null):null;
+if($me&&$view==='clicks'&&isset($_GET['export'])){
+ [$where,$params]=clickFilters();
+ header('Content-Type: text/csv; charset=utf-8');header('Content-Disposition: attachment; filename="clicks-'.date('Y-m-d').'.csv"');
+ $out=fopen('php://output','w');fputcsv($out,['Time','Article','Destination','Link text','Placement','Clicked on page','Traffic source','Referrer','UTM source','UTM medium','UTM campaign','Landing page','Visitor ID','IP','Country','Device','Browser','OS','Bot','Admin','User agent']);
+ $q=db()->prepare("SELECT k.*,l.url,r.title FROM clicks k JOIN links l ON l.id=k.link_id LEFT JOIN reviews r ON r.id=k.post_id WHERE $where ORDER BY k.id DESC");$q->execute($params);
+ while($c=$q->fetch())fputcsv($out,[$c['created_at'],$c['title']??'',$c['url'],$c['anchor'],$c['placement'],$c['page'],$c['source'],$c['referrer'],$c['utm_source'],$c['utm_medium'],$c['utm_campaign'],$c['landing'],$c['visitor'],$c['ip'],$c['country'],$c['device'],$c['browser'],$c['os'],$c['is_bot']?'yes':'no',$c['is_admin']?'yes':'no',$c['user_agent']]);
+ exit;
+}
 if($logged&&!$me){unset($_SESSION['admin']);$logged=false;}
-$titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','appearance'=>'Appearance','users'=>'Users','settings'=>'Settings'];
+$titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','clicks'=>'Clicks','appearance'=>'Appearance','users'=>'Users','settings'=>'Settings'];
 if(!isset($titles[$view]))$view='dashboard';
 ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($logged?$titles[$view]:'Log in') ?> ‹ <?= e(setting('site_name')) ?></title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/admin.css"><script src="/assets/admin.js" defer></script></head>
 <body class="<?= $logged?'cms':'cms-login' ?>">
@@ -226,7 +256,7 @@ if(!isset($titles[$view]))$view='dashboard';
  $now=now();
  $count=fn(string $where)=>(int)db()->query("SELECT COUNT(*) FROM reviews r WHERE $where")->fetchColumn();
  $counts=['all'=>$count("r.status!='trash'"),'published'=>$count(live()),'scheduled'=>$count("r.status='published' AND r.published_at>'$now'"),'draft'=>$count("r.status='draft'"),'trash'=>$count("r.status='trash'")];
- $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'appearance'=>['Appearance','image'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
+ $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'clicks'=>['Clicks','chart'],'appearance'=>['Appearance','image'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
 ?>
 <header class="cms-top">
  <button type="button" class="cms-menu" data-side-toggle aria-label="Toggle menu"><?= aicon('menu') ?></button>
@@ -466,6 +496,75 @@ if(!isset($titles[$view]))$view='dashboard';
   <div class="save-bar"><button class="button button-primary button-lg"><?= aicon('send') ?> Save Appearance</button></div>
  </form>
  <template data-menu-template><div class="menu-row" data-menu-row><span class="drag" aria-hidden="true">⋮⋮</span><input class="input" name="menu_label[]" placeholder="Label" aria-label="Menu label" maxlength="40"><input class="input" name="menu_url[]" placeholder="/reviews or https://…" aria-label="Menu link"><select class="input" name="menu_type[]" aria-label="Item type"><option value="link">Link</option><option value="categories">Categories dropdown</option></select><span class="menu-btns"><button type="button" class="icon-danger" data-move="-1" aria-label="Move up" title="Move up">↑</button><button type="button" class="icon-danger" data-move="1" aria-label="Move down" title="Move down">↓</button><button type="button" class="icon-danger" data-remove aria-label="Remove item" title="Remove"><?= aicon('trash') ?></button></span></div></template>
+ </section>
+
+<?php elseif($view==='clicks'):
+ [$where,$params,$f]=clickFilters();
+ $base="FROM clicks k JOIN links l ON l.id=k.link_id LEFT JOIN reviews r ON r.id=k.post_id WHERE $where";
+ $one=fn(string $sql)=>query($sql,$params)[0]??[];
+ $tot=$one("SELECT COUNT(*) n,COUNT(DISTINCT NULLIF(k.visitor,'')) v,COUNT(DISTINCT k.post_id) p,COUNT(DISTINCT k.link_id) l,SUM(substr(k.created_at,1,10)='".date('Y-m-d')."') t $base");
+ $byDay=[];foreach(query("SELECT substr(k.created_at,1,10) d,COUNT(*) n $base GROUP BY d",$params) as $row)$byDay[$row['d']]=(int)$row['n'];
+ $days=[];for($d=strtotime($f['from']);$d<=strtotime($f['to'])&&count($days)<370;$d+=86400)$days[date('Y-m-d',$d)]=$byDay[date('Y-m-d',$d)]??0;
+ $max=max(1,...array_values($days)?:[1]);
+ $group=fn(string $col,int $limit=8)=>query("SELECT $col k,COUNT(*) n $base GROUP BY $col ORDER BY n DESC LIMIT $limit",$params);
+ $topPosts=query("SELECT k.post_id k,COALESCE(r.title,'(no article)') label,COUNT(*) n $base GROUP BY k.post_id ORDER BY n DESC LIMIT 8",$params);
+ $topLinks=query("SELECT k.link_id k,l.url label,COUNT(*) n $base GROUP BY k.link_id ORDER BY n DESC LIMIT 8",$params);
+ $page=max(1,(int)($_GET['p']??1));$per=50;$pages=max(1,(int)ceil(((int)($tot['n']??0))/$per));$page=min($page,$pages);
+ $rows=query("SELECT k.*,l.url,r.title,r.slug $base ORDER BY k.id DESC LIMIT $per OFFSET ".(($page-1)*$per),$params);
+ $places=['body'=>'In article text','cta-toc'=>'Sidebar "Shop on" button','cta-about'=>'About brand box','cta-band'=>'Brand band'];
+ $host=fn(string $u)=>preg_replace('/^www\./','',(string)parse_url($u,PHP_URL_HOST));
+ $breakdowns=[['Traffic sources','source',$group('k.source')],['Devices','device',$group('k.device')],['Browsers',null,$group('k.browser')],['Operating systems',null,$group('k.os')],['Placement on page','placement',$group('k.placement')],['Countries','country',$group("NULLIF(k.country,'')")]];
+?>
+ <section class="panel"><?= pageHead('chart','Clicks','Every tracked outgoing link click: who clicked, from where, when and on which device.','<a class="button button-outline" href="'.e(clickUrl($f,['export'=>1])).'">'.aicon('file').' Export CSV</a>') ?>
+ <form class="filters" method="get"><input type="hidden" name="view" value="clicks">
+  <label>From<input class="input" type="date" name="from" value="<?= e($f['from']) ?>"></label>
+  <label>To<input class="input" type="date" name="to" value="<?= e($f['to']) ?>"></label>
+  <label>Article<select class="input" name="post"><option value="">All articles</option><?php foreach(query("SELECT DISTINCT r.id,r.title FROM clicks k JOIN reviews r ON r.id=k.post_id ORDER BY r.title") as $o): ?><option value="<?= $o['id'] ?>" <?= $f['post']===(int)$o['id']?'selected':'' ?>><?= e(mb_strimwidth($o['title'],0,60,'…')) ?></option><?php endforeach ?></select></label>
+  <label>Link<select class="input" name="link"><option value="">All links</option><?php foreach(query("SELECT DISTINCT l.id,l.url FROM clicks k JOIN links l ON l.id=k.link_id ORDER BY l.url") as $o): ?><option value="<?= $o['id'] ?>" <?= $f['link']===(int)$o['id']?'selected':'' ?>><?= e($host($o['url']).' — '.mb_strimwidth((string)parse_url($o['url'],PHP_URL_PATH),0,40,'…')) ?></option><?php endforeach ?></select></label>
+  <label>Source<select class="input" name="source"><option value="">All sources</option><?php foreach(query("SELECT DISTINCT source FROM clicks ORDER BY source") as $o): ?><option <?= $f['source']===$o['source']?'selected':'' ?>><?= e($o['source']) ?></option><?php endforeach ?></select></label>
+  <label>Device<select class="input" name="device"><option value="">All devices</option><?php foreach(['Desktop','Mobile','Tablet','Bot'] as $o): ?><option <?= $f['device']===$o?'selected':'' ?>><?= $o ?></option><?php endforeach ?></select></label>
+  <label>Placement<select class="input" name="placement"><option value="">Anywhere</option><?php foreach($places as $k=>$o): ?><option value="<?= $k ?>" <?= $f['placement']===$k?'selected':'' ?>><?= e($o) ?></option><?php endforeach ?></select></label>
+  <label class="filters-wide">Search<input class="input" type="search" name="q" value="<?= e($f['q']) ?>" placeholder="URL, link text, visitor ID or IP"></label>
+  <label class="check-row"><input type="checkbox" name="bots" value="1" <?= $f['bots']?'checked':'' ?>> Include bots</label>
+  <label class="check-row"><input type="checkbox" name="admins" value="1" <?= $f['admins']?'checked':'' ?>> Include admin clicks</label>
+  <div class="filters-actions"><button class="button button-primary"><?= aicon('search') ?> Apply</button><a class="button button-outline" href="/admin.php?view=clicks">Reset</a></div>
+ </form>
+ <div class="glance glance-4">
+  <?php foreach([['Clicks',(int)($tot['n']??0),'chart','teal'],['Unique visitors',(int)($tot['v']??0),'users','blue'],['Clicks today',(int)($tot['t']??0),'clock','violet'],['Articles clicked',(int)($tot['p']??0),'file','amber']] as [$label,$n,$ic,$tone]): ?>
+   <div class="tile tile-<?= $tone ?>"><span class="tile-icon"><?= aicon($ic) ?></span><span><b class="tile-num"><?= number_format($n) ?></b><span class="tile-label"><?= $label ?></span></span></div>
+  <?php endforeach ?>
+ </div>
+ <section class="box chart-box"><h2 class="box-title"><?= aicon('chart','icon title-icon') ?> Clicks per day <span class="muted"><?= e(date('M j',strtotime($f['from']))) ?> – <?= e(date('M j, Y',strtotime($f['to']))) ?></span></h2>
+  <?php $n=count($days);$w=max(1,$n); ?>
+  <svg class="bar-chart" viewBox="0 0 <?= $w*10 ?> 120" preserveAspectRatio="none" role="img" aria-label="Clicks per day">
+   <?php $i=0;foreach($days as $d=>$c): $h=$c?max(2,round($c/$max*110)):0; ?><rect x="<?= $i*10+1 ?>" y="<?= 115-$h ?>" width="8" height="<?= $h ?>" rx="1.5"><title><?= e(date('D, M j',strtotime($d))) ?>: <?= $c ?> click<?= $c===1?'':'s' ?></title></rect><?php $i++;endforeach ?>
+   <line x1="0" y1="115.5" x2="<?= $w*10 ?>" y2="115.5"/>
+  </svg>
+  <div class="chart-axis"><span><?= e(date('M j',strtotime($f['from']))) ?></span><span>max <?= $max ?>/day</span><span><?= e(date('M j',strtotime($f['to']))) ?></span></div>
+ </section>
+ <div class="breakdowns">
+  <section class="box"><h2 class="box-title"><?= aicon('file','icon title-icon') ?> Top articles</h2><?php if(!$topPosts): ?><p class="muted">No clicks yet.</p><?php endif ?><ul class="bars"><?php foreach($topPosts as $row): ?><li><a href="<?= e(clickUrl($f,['post'=>(int)$row['k']])) ?>"><span><?= e($row['label']) ?></span><b><?= $row['n'] ?></b></a><i><em data-w="<?= round($row['n']/max(1,$tot['n'])*100) ?>"></em></i></li><?php endforeach ?></ul></section>
+  <section class="box"><h2 class="box-title"><?= aicon('send','icon title-icon') ?> Top destinations</h2><?php if(!$topLinks): ?><p class="muted">No clicks yet.</p><?php endif ?><ul class="bars"><?php foreach($topLinks as $row): ?><li><a href="<?= e(clickUrl($f,['link'=>(int)$row['k']])) ?>" title="<?= e($row['label']) ?>"><span><b class="host"><?= e($host($row['label'])) ?></b> <?= e(mb_strimwidth((string)parse_url($row['label'],PHP_URL_PATH),0,40,'…')) ?></span><b><?= $row['n'] ?></b></a><i><em data-w="<?= round($row['n']/max(1,$tot['n'])*100) ?>"></em></i></li><?php endforeach ?></ul></section>
+  <?php foreach($breakdowns as [$title,$param,$data]): ?>
+  <section class="box"><h2 class="box-title"><?= $title ?></h2><?php if(!$data): ?><p class="muted">No data.</p><?php endif ?><ul class="bars"><?php foreach($data as $row): $label=$row['k']??'Unknown'; $label=$param==='placement'?($places[$label]??($label?:'Unknown')):$label; ?><li><?php if($param&&$row['k']!==null): ?><a href="<?= e(clickUrl($f,[$param=>$row['k']])) ?>"><?php else: ?><a><?php endif ?><span><?= e($label) ?></span><b><?= $row['n'] ?></b></a><i><em data-w="<?= round($row['n']/max(1,$tot['n'])*100) ?>"></em></i></li><?php endforeach ?></ul></section>
+  <?php endforeach ?>
+ </div>
+ <h2 class="section-h"><?= aicon('users','icon title-icon') ?> Click log <span class="muted"><?= number_format((int)($tot['n']??0)) ?> clicks</span></h2>
+ <div class="table-wrap"><table class="list-table click-table"><thead><tr><th>Time</th><th>Article &amp; link</th><th>Came from</th><th>Visitor</th><th>Device</th></tr></thead><tbody>
+  <?php foreach($rows as $c): ?><tr>
+   <td class="nowrap"><b><?= e(date('M j, Y',strtotime($c['created_at']))) ?></b><br><span class="muted"><?= e(date('g:i:s a',strtotime($c['created_at']))) ?></span></td>
+   <td><?php if($c['title']): ?><a class="row-title" href="<?= e(clickUrl($f,['post'=>(int)$c['post_id']])) ?>"><?= e($c['title']) ?></a><br><?php endif ?><span class="muted">→ <a href="<?= e($c['url']) ?>" target="_blank" rel="noopener noreferrer" title="<?= e($c['url']) ?>"><?= e($host($c['url'])) ?></a><?= $c['anchor']!==''?' · “'.e($c['anchor']).'”':'' ?> · <?= e($places[$c['placement']]??$c['placement']) ?></span></td>
+   <td><a href="<?= e(clickUrl($f,['source'=>$c['source']])) ?>"><span class="chip chip-teal"><?= e($c['source']?:'Direct') ?></span></a><?php if($c['utm_campaign']!==''): ?><br><span class="muted">Campaign: <?= e($c['utm_campaign']) ?><?= $c['utm_medium']!==''?' / '.e($c['utm_medium']):'' ?></span><?php endif ?><?php if($c['referrer']!==''): ?><br><span class="muted ellipsis" title="<?= e($c['referrer']) ?>"><?= e(mb_strimwidth($c['referrer'],0,48,'…')) ?></span><?php endif ?></td>
+   <td><a href="<?= e(clickUrl($f,['q'=>$c['visitor']])) ?>" title="Show all clicks by this visitor"><code><?= e($c['visitor']!==''?substr($c['visitor'],0,8):'—') ?></code></a><br><span class="muted"><?= e($c['ip']) ?><?= $c['country']!==''?' · '.e($c['country']):'' ?></span><?= $c['is_admin']?' <span class="tag">Admin</span>':'' ?></td>
+   <td><?= e($c['device']) ?><br><span class="muted"><?= e($c['browser']) ?> · <?= e($c['os']) ?></span></td>
+  </tr><?php endforeach ?>
+  <?php if(!$rows): ?><tr><td colspan="5" class="empty muted">No clicks match these filters yet. Links in articles are tracked automatically from now on.</td></tr><?php endif ?>
+ </tbody></table></div>
+ <?php if($pages>1): ?><nav class="pagination" aria-label="Pages"><?php for($i=max(1,$page-3);$i<=min($pages,$page+3);$i++): ?><a class="<?= $i===$page?'current':'' ?>" href="<?= e(clickUrl($f,['p'=>$i])) ?>"><?= $i ?></a><?php endfor ?></nav><?php endif ?>
+ <form method="post" class="box stack narrow tracking-settings"><?= csrfField() ?><input type="hidden" name="action" value="tracking"><h2 class="box-title"><?= aicon('gear','icon title-icon') ?> Affiliate sub-ID <span class="muted">(optional)</span></h2>
+  <p class="hint">Adds this click's ID to every outgoing link, so conversions in your affiliate dashboard can be matched to a click here. For Impact links (sjv.io, pxf.io, evyy.net…) use <code>subId1</code>. Leave empty to turn it off.</p>
+  <label>Parameter name<input class="input" name="subid_param" value="<?= e(setting('subid_param')) ?>" placeholder="subId1" maxlength="30"></label>
+  <div><button class="button button-primary">Save</button></div></form>
  </section>
 
 <?php elseif($view==='users'): ?>

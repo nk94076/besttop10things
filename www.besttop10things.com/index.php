@@ -11,6 +11,24 @@ if(($routes[$path]??'')==='home'&&isset($_GET['page'])&&$_SERVER['REQUEST_METHOD
  $target=cleanUrl('/?'.(string)($_SERVER['QUERY_STRING']??''));
  if(!str_starts_with($target,'/?')){header('Location: '.$target,true,301);exit;}
 }
+// Outgoing link click: log it, then send the visitor on to the stored destination.
+if(preg_match('~^/go/(\d+)$~',$path,$m)){
+ $link=query('SELECT * FROM links WHERE id=?',[(int)$m[1]])[0]??null;
+ if(!$link){http_response_code(404);header('Content-Type: text/plain');exit('Link not found');}
+ captureVisit();
+ $visit=$_SESSION['visit']??[];
+ $ua=mb_substr((string)($_SERVER['HTTP_USER_AGENT']??''),0,400);$agent=parseAgent($ua);
+ $postId=(int)($_GET['p']??0);if($postId&&!query('SELECT id FROM reviews WHERE id=?',[$postId]))$postId=0;
+ $page=(string)parse_url((string)($_SERVER['HTTP_REFERER']??''),PHP_URL_PATH);
+ run('INSERT INTO clicks(link_id,post_id,placement,anchor,page,source,referrer,utm_source,utm_medium,utm_campaign,landing,visitor,ip,country,device,browser,os,user_agent,is_bot,is_admin,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[
+  (int)$link['id'],$postId?:null,substr(preg_replace('/[^a-z0-9-]/','',(string)($_GET['s']??'')),0,30),mb_substr(trim((string)($_GET['a']??'')),0,80),mb_substr($page,0,300),
+  (string)($visit['source']??'Direct'),(string)($visit['referrer']??''),(string)($visit['utm_source']??''),(string)($visit['utm_medium']??''),(string)($visit['utm_campaign']??''),(string)($visit['landing']??''),
+  (string)($_COOKIE['btv']??''),clientIp(),strtoupper(substr(preg_replace('/[^A-Za-z]/','',(string)($_SERVER['HTTP_CF_IPCOUNTRY']??'')),0,2)),
+  $agent['device'],$agent['browser'],$agent['os'],$ua,$agent['is_bot'],isset($_SESSION['admin'])?1:0,now()]);
+ $dest=$link['url'];$param=setting('subid_param');
+ if(preg_match('/^[A-Za-z0-9_]{1,30}$/',$param))$dest.=(str_contains($dest,'?')?'&':'?').$param.'=bt'.db()->lastInsertId();
+ header('Cache-Control: no-store, private');header('X-Robots-Tag: noindex, nofollow');header('Location: '.$dest,true,302);exit;
+}
 if(isset($routes[$path]))$page=$routes[$path];
 elseif(preg_match('~^/category/([a-z0-9-]+)$~',$path,$m)){$page='reviews';$_GET['category']=$m[1];}
 elseif(preg_match('~^/([a-z0-9-]+)$~',$path,$m)){$page='review';$_GET['slug']=$m[1];}
@@ -19,7 +37,7 @@ if($page==='404')http_response_code(404);
 
 if($page==='robots'){
  header('Content-Type: text/plain; charset=utf-8');
- echo "User-agent: *\nDisallow: /admin.php\n\nSitemap: https://".($_SERVER['HTTP_HOST']??'')."/sitemap.xml\n";exit;
+ echo "User-agent: *\nDisallow: /admin.php\nDisallow: /go/\n\nSitemap: https://".($_SERVER['HTTP_HOST']??'')."/sitemap.xml\n";exit;
 }
 if($page==='sitemap'){
  header('Content-Type: application/xml; charset=utf-8');
@@ -32,6 +50,8 @@ if($page==='sitemap'){
  foreach($urls as [$u,$mod])echo '<url><loc>'.e($base.$u).'</loc>'.($mod?'<lastmod>'.e($mod).'</lastmod>':'').'</url>';
  echo '</urlset>';exit;
 }
+
+if($_SERVER['REQUEST_METHOD']==='GET')captureVisit();
 
 // Newsletter sign-up
 if($_SERVER['REQUEST_METHOD']==='POST'&&($_POST['action']??'')==='subscribe'){
@@ -183,8 +203,8 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
    </div>
    <img class="post-img" src="<?= e($r['image']) ?>" alt="<?= e($r['title']) ?>">
    <?php if($r['demo']): ?><p class="note note-amber">This is a sample review. Images, ratings and observations demonstrate the website and do not represent a verified product test.</p><?php endif ?>
-   <div class="prose post-body"><?= renderBody($r['body']) ?></div>
-   <?php if($hasCta): ?><div class="cta-band"><div><p class="eyebrow">Ready to explore?</p><h2><?= e($r['brand']) ?></h2><?php if($r['brand_about']!==''): ?><p><?= e($r['brand_about']) ?></p><?php endif ?></div><a class="btn btn-primary" href="<?= e($r['cta_url']) ?>" target="_blank" rel="sponsored nofollow noopener">Visit <?= e($r['brand']) ?> <?= ficon('external','ic ic-sm') ?></a></div><?php endif ?>
+   <div class="prose post-body"><?php trackPost((int)$r['id']); ?><?= renderBody($r['body']) ?></div>
+   <?php if($hasCta): ?><div class="cta-band"><div><p class="eyebrow">Ready to explore?</p><h2><?= e($r['brand']) ?></h2><?php if($r['brand_about']!==''): ?><p><?= e($r['brand_about']) ?></p><?php endif ?></div><a class="btn btn-primary" href="<?= e(trackUrl($r['cta_url'],'cta-band',$r['brand'])) ?>" target="_blank" rel="sponsored nofollow noopener">Visit <?= e($r['brand']) ?> <?= ficon('external','ic ic-sm') ?></a></div><?php endif ?>
    <p class="disclose-line"><?= ficon('doc','ic ic-sm') ?> This article may contain affiliate links. We may earn a commission if you buy through them, at no extra cost to you.</p>
   </div>
   <aside class="post-side">
@@ -194,9 +214,9 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
     <a class="btn btn-outline btn-block" href="/compare?category=<?= e($r['category_slug']) ?>">Compare options <?= ficon('arrow','ic ic-sm') ?></a></div><?php endif ?>
    <?php if(count($toc)>1||$hasCta): ?><nav class="side-card toc" aria-label="In this article"><p class="side-title"><span class="side-ic"><?= ficon('listnum','ic ic-sm') ?></span>In this article</p>
     <?php if(count($toc)>1): ?><ol><?php foreach($toc as $h): ?><li><a href="#<?= e(slug($h)) ?>" data-toc-link><?= e($h) ?></a></li><?php endforeach ?></ol><?php endif ?>
-    <?php if($hasCta): ?><a class="btn btn-primary btn-block" href="<?= e($r['cta_url']) ?>" target="_blank" rel="sponsored nofollow noopener">Shop on <?= e($r['brand']) ?> <?= ficon('arrow','ic ic-sm') ?></a><?php endif ?></nav><?php endif ?>
+    <?php if($hasCta): ?><a class="btn btn-primary btn-block" href="<?= e(trackUrl($r['cta_url'],'cta-toc',$r['brand'])) ?>" target="_blank" rel="sponsored nofollow noopener">Shop on <?= e($r['brand']) ?> <?= ficon('arrow','ic ic-sm') ?></a><?php endif ?></nav><?php endif ?>
    <?php if($takeaways): ?><div class="side-card"><p class="side-title"><span class="side-ic"><?= ficon('bulb','ic ic-sm') ?></span>Key Takeaways</p><ul class="pc pc-pro"><?php foreach($takeaways as $t): ?><li><?= ficon('check','ic ic-sm') ?><?= e($t) ?></li><?php endforeach ?></ul></div><?php endif ?>
-   <?php if($hasCta): ?><div class="side-card brand-card"><div class="brand-row"><span class="brand-logo tone-<?= $tone ?>"><?= e(mb_strtoupper(mb_substr($r['brand'],0,1))) ?></span><div><p class="side-title">About <?= e($r['brand']) ?></p><?php if($r['brand_about']!==''): ?><p class="side-text"><?= e($r['brand_about']) ?></p><?php endif ?></div></div><a class="btn btn-primary btn-block" href="<?= e($r['cta_url']) ?>" target="_blank" rel="sponsored nofollow noopener">Visit <?= e($r['brand']) ?> <?= ficon('external','ic ic-sm') ?></a></div><?php endif ?>
+   <?php if($hasCta): ?><div class="side-card brand-card"><div class="brand-row"><span class="brand-logo tone-<?= $tone ?>"><?= e(mb_strtoupper(mb_substr($r['brand'],0,1))) ?></span><div><p class="side-title">About <?= e($r['brand']) ?></p><?php if($r['brand_about']!==''): ?><p class="side-text"><?= e($r['brand_about']) ?></p><?php endif ?></div></div><a class="btn btn-primary btn-block" href="<?= e(trackUrl($r['cta_url'],'cta-about',$r['brand'])) ?>" target="_blank" rel="sponsored nofollow noopener">Visit <?= e($r['brand']) ?> <?= ficon('external','ic ic-sm') ?></a></div><?php endif ?>
    <?php if($related): ?><div class="side-card"><p class="side-title"><span class="side-ic"><?= ficon('related','ic ic-sm') ?></span>Related in <?= e($r['category']) ?></p><ul class="mini-list"><?php foreach($related as $x): ?><li><a href="<?= e(reviewUrl($x)) ?>"><img src="<?= e($x['image']) ?>" alt="" loading="lazy"><span><b><?= e($x['title']) ?></b><small><?= e(date('M j, Y',strtotime($x['published_at']??$x['created_at']))) ?> • <?= readMinutes($x['body']) ?> min read</small></span></a></li><?php endforeach ?></ul></div><?php endif ?>
   </aside>
  </div>
@@ -241,6 +261,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
  <?php else: ?>
   <p>This website stores essential session cookies for secure CMS login and form protection. Public browsing does not require an account.</p>
   <p>If you subscribe to our newsletter, we store your email address so we can send you updates. You can ask us to remove it at any time.</p>
+  <p>When you click a link to another website, such as a shop, we record the click so we can understand which articles are useful. This includes the time, the article and link, the page you came from, your IP address, approximate country if available, device and browser type, and a random visitor ID kept in a cookie. We do not record your name or email with clicks.</p>
   <p>CMS account information and editorial content are stored in the site's database. Failed login attempts are temporarily recorded to limit repeated attempts. The site does not include analytics or advertising trackers by default.</p>
   <p>Images configured by editors may load from third-party HTTPS hosts. Those hosts receive the network information needed to serve an image. Website server logs may also record requests.</p>
  <?php endif ?>

@@ -1,10 +1,25 @@
+// Theme: remember light/dark per browser
+const root = document.documentElement;
+try { if (localStorage.getItem('cms-theme') === 'dark') root.dataset.theme = 'dark'; } catch {}
+document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
+  const dark = root.dataset.theme !== 'dark';
+  if (dark) root.dataset.theme = 'dark'; else delete root.dataset.theme;
+  try { localStorage.setItem('cms-theme', dark ? 'dark' : 'light'); } catch {}
+});
+
+// Close the "+ New" menu when clicking elsewhere
+document.addEventListener('click', event => {
+  document.querySelectorAll('details.new-menu[open], details.kebab[open]').forEach(menu => { if (!menu.contains(event.target)) menu.removeAttribute('open'); });
+});
+
 document.querySelectorAll('form[data-confirm]').forEach(form => form.addEventListener('submit', event => {
   if (!window.confirm(form.dataset.confirm)) event.preventDefault();
 }));
 
-document.querySelector('[data-side-toggle]')?.addEventListener('click', () => {
-  document.getElementById('cms-side').classList.toggle('open');
-});
+document.querySelectorAll('[data-side-toggle]').forEach(el => el.addEventListener('click', () => {
+  const open = document.getElementById('cms-side').classList.toggle('open');
+  document.querySelector('.cms-scrim')?.classList.toggle('open', open);
+}));
 
 // Posts list: select all + bulk action guard
 document.querySelector('[data-check-all]')?.addEventListener('change', event => {
@@ -115,7 +130,8 @@ if (editor) {
   const pubdate = editor.querySelector('[data-pubdate]');
   const publishBtn = editor.querySelector('[data-publish-btn]');
   const updatePublish = () => {
-    const future = pubdate.value && new Date(pubdate.value) > new Date();
+    // Compare against server time (site timezone), not the browser clock
+    const future = pubdate.value && pubdate.value > editor.dataset.now;
     publishBtn.textContent = future ? 'Schedule' : publishBtn.dataset.label;
   };
   pubdate.addEventListener('input', updatePublish);

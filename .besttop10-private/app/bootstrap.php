@@ -223,3 +223,52 @@ function sendCustomCodeCsp(): void {
  $hosts=implode(' ',array_map(fn($d)=>'https://'.$d,codeDomains()));
  header("Content-Security-Policy: default-src 'self'; img-src 'self' https: data:; style-src 'self' $hosts; script-src 'self' 'nonce-".cspNonce()."' https://www.googletagmanager.com $hosts; connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com $hosts; frame-src $hosts https://www.googletagmanager.com; form-action 'self'; base-uri 'self'; frame-ancestors 'none'");
 }
+
+// Same checks as the live analyser in the post editor (assets/admin.js). Returns [seoChecks, aiChecks], each a
+// list of [state('pass'|'warn'|'fail'), message]; score = pass 1, warn ½, fail 0.
+function seoAnalyse(array $p): array {
+ $text=(string)$p['body'];$lower=mb_strtolower($text);
+ $plain=preg_replace('/[#*>`_-]/u',' ',preg_replace('/!?\[([^\]]*)\]\([^)]*\)/u','$1',$text));
+ $words=preg_split('/\s+/u',trim($plain),-1,PREG_SPLIT_NO_EMPTY);$wc=count($words);
+ preg_match_all('/^##\s+(.+)$/mu',$text,$m);$h2s=array_map('mb_strtolower',$m[1]);
+ $title=trim((string)(($p['meta_title']??'')!==''?$p['meta_title']:$p['title']));
+ $desc=trim((string)(($p['meta_description']??'')!==''?$p['meta_description']:$p['excerpt']));
+ $kw=mb_strtolower(trim((string)($p['focus_keyword']??'')));
+ $has=fn($s)=>$kw!==''&&str_contains(mb_strtolower($s),$kw);
+ $first=mb_strtolower(implode(' ',array_slice($words,0,120)));
+ $kwCount=$kw!==''?substr_count($lower,$kw):0;
+ $density=$wc?$kwCount*count(preg_split('/\s+/',$kw))/$wc*100:0;
+ preg_match_all('/\]\(([^)]+)\)/',$text,$lm);$links=$lm[1];
+ $seo=[];
+ $seo[]=$kw!==''?['pass','Focus keyword set']:['fail','Add a focus keyword'];
+ if($kw!==''){
+  $seo[]=$has($title)?['pass','Keyword in SEO title']:['fail','Keyword not in SEO title'];
+  $seo[]=$has($desc)?['pass','Keyword in meta description']:['fail','Keyword not in meta description'];
+  $seo[]=str_contains((string)$p['slug'],trim(preg_replace('/[^a-z0-9]+/','-',$kw),'-')===''?'@':preg_replace('/[^a-z0-9]+/','-',$kw))?['pass','Keyword in URL']:['warn','Keyword not in URL'];
+  $seo[]=str_contains($first,$kw)?['pass','Keyword in introduction']:['fail','Keyword not in introduction'];
+  $seo[]=array_filter($h2s,fn($h)=>str_contains($h,$kw))?['pass','Keyword in a subheading']:['warn','Keyword not in a subheading'];
+  $seo[]=$density>=0.5&&$density<=2.5?['pass',sprintf('Keyword density %.1f%%',$density)]:['warn',sprintf('Keyword density %.1f%% (0.5–2.5%%)',$density)];
+ }
+ $tl=mb_strlen($title);$dl=mb_strlen($desc);
+ $seo[]=$tl>=30&&$tl<=60?['pass',"Title length $tl"]:['warn',"Title length $tl (30–60)"];
+ $seo[]=$dl>=120&&$dl<=160?['pass',"Description length $dl"]:['warn',"Description length $dl (120–160)"];
+ $seo[]=$wc>=600?['pass',"$wc words"]:['warn',"$wc words (600+)"];
+ $seo[]=count($h2s)>=3?['pass',count($h2s).' subheadings']:['warn','Fewer than 3 subheadings'];
+ $seo[]=array_filter($links,fn($u)=>str_starts_with($u,'/'))?['pass','Internal link']:['warn','No internal link'];
+ $seo[]=array_filter($links,fn($u)=>str_starts_with($u,'https://'))?['pass','Outbound link']:['warn','No outbound link'];
+ $tldr=trim((string)($p['tldr']??''));$tn=mb_strlen($tldr);
+ $tk=count(array_filter(array_map('trim',explode("\n",(string)($p['takeaways']??'')))));
+ $faq=0;
+ if(preg_match('/^##\s+(?:faqs?|frequently asked questions).*$/imu',$text)){$parts=preg_split('/^##\s+(?:faqs?|frequently asked questions).*$/imu',$text);$sec=preg_split('/^##\s/mu',$parts[1]??'')[0];$faq=preg_match_all('/^\*\*.+\?\*\*\s*$/mu',$sec);}
+ $ai=[];
+ $ai[]=$tn>=40&&$tn<=320?['pass','Quick answer']:($tn?['warn',"Quick answer length $tn (40–320)"]:['fail','No quick answer']);
+ $ai[]=$tk>=3?['pass',"$tk takeaways"]:['warn','Fewer than 3 takeaways'];
+ $ai[]=$faq>=3?['pass',"FAQ ($faq)"]:['warn',"FAQ questions: $faq (3+)"];
+ $ai[]=array_filter($h2s,fn($h)=>str_ends_with(trim($h),'?')||preg_match('/^(what|how|why|which|when|is|are|can|do|does|should)\b/u',$h))?['pass','Question heading']:['warn','No question-style heading'];
+ $ai[]=preg_match('/^\s*(-|\d+\.)\s/mu',$text)?['pass','Has a list']:['warn','No list'];
+ $ai[]=preg_match_all('/\b\d[\d.,%]*\b/u',$plain)>=3?['pass','Specific numbers']:['warn','Fewer than 3 numbers'];
+ $ai[]=!$h2s||$wc/count($h2s)<=350?['pass','Short sections']:['warn','Sections too long ('.round($wc/count($h2s)).' words per heading)'];
+ $ai[]=$kw!==''&&str_contains($first,$kw)&&preg_match('/[.!?]/u',implode(' ',array_slice($words,0,60)))?['pass','Direct answer up front']:['warn','No direct answer up front'];
+ return [$seo,$ai];
+}
+function seoScore(array $checks): int { $n=0;foreach($checks as [$s])$n+=$s==='pass'?1:($s==='warn'?0.5:0);return (int)round($n/count($checks)*100); }

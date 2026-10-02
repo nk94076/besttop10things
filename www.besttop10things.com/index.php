@@ -105,6 +105,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'&&($_POST['action']??'')==='subscribe'){
 
 $join='SELECT r.*,c.name AS category,c.slug AS category_slug FROM reviews r JOIN categories c ON c.id=r.category_id ';
 $cats=categories();
+$shownCats=array_values(array_filter($cats,fn($c)=>(int)$c['total']>0)); // public lists only show categories with live posts
 if ($page==='review') {
  $review=query($join.'WHERE r.slug=? AND '.(isset($_SESSION['admin'],$_GET['preview'])?"r.status!='trash'":live()),[(string)($_GET['slug']??'')])[0]??null;
  if(!$review) { http_response_code(404); $page='404'; }
@@ -112,7 +113,7 @@ if ($page==='review') {
 $valid=['home','review','reviews','top10','categories','about','privacy','compare','404'];
 if(!in_array($page,$valid,true)){http_response_code(404);$page='404';}
 $titles=['home'=>'','reviews'=>'All Reviews & Buying Guides','top10'=>'Top 10 Lists: Our Highest-Rated Picks','categories'=>'Browse All Categories','about'=>'About Us','privacy'=>'Privacy Policy','compare'=>'Compare Top-Rated Picks Side by Side','404'=>'Page not found'];
-$descs=['reviews'=>'Browse every review and buying guide on '.setting('site_name').': honest trade-offs, practical tips and clear recommendations across tech, travel, shopping, lifestyle and more.','top10'=>'Our ten highest-rated and newest picks, ranked, with quick scores and links to the full reviews.','categories'=>'Explore reviews and buying guides by category, from tech and travel to fashion, home, education and more.','compare'=>'Compare our top-rated picks side by side: scores, pros and cons at a glance.','about'=>'Who we are, how we research and write our reviews, and how we keep our recommendations independent.','privacy'=>'How '.setting('site_name').' collects, uses and protects information, including cookies and outbound link tracking.','404'=>'The page you were looking for could not be found.'];
+$descs=['reviews'=>'Browse every review and buying guide on '.setting('site_name').': honest trade-offs, practical tips and clear recommendations across tech, travel, shopping, lifestyle and more.','top10'=>'Our rated reviews ranked by review score, plus the latest buying guides, listed separately and unranked.','categories'=>'Explore reviews and buying guides by category, from tech and travel to fashion, home, education and more.','compare'=>'Compare rated reviews in the same category side by side: scores, pros and cons at a glance.','about'=>'Who we are, how we research and write our reviews, and how we keep our recommendations independent.','privacy'=>'How '.setting('site_name').' collects, uses and protects information, including cookies and outbound link tracking.','404'=>'The page you were looking for could not be found.'];
 $base=siteBase();$crumb=fn(array $items)=>['@type'=>'BreadcrumbList','itemListElement'=>array_map(fn($i,$x)=>['@type'=>'ListItem','position'=>$i+1,'name'=>$x[0],'item'=>$base.$x[1]],array_keys($items),$items)];
 $seo=[];$pageTitle=$titles[$page]??'';$pageDesc=$descs[$page]??'';
 if($page==='review'){
@@ -138,15 +139,15 @@ if($page==='review'){
  $catSlug=(string)($_GET['category']??'');$curCat=null;foreach($cats as $c)if($c['slug']===$catSlug)$curCat=$c;
  if($curCat){
   $pageTitle=$page==='top10'?'Top 10 '.$curCat['name'].' Picks':$curCat['name'].' Reviews & Buying Guides';
-  $pageDesc=$page==='top10'?'Our ten best-rated '.$curCat['name'].' reviews and guides, ranked.':'The latest '.$curCat['name'].' reviews, buying guides and tips from '.setting('site_name').': '.$curCat['total'].' article'.($curCat['total']==1?'':'s').' with honest pros, cons and recommendations.';
+  $pageDesc=$page==='top10'?'Rated '.$curCat['name'].' reviews ranked by review score, plus the latest '.$curCat['name'].' guides.':'The latest '.$curCat['name'].' reviews, buying guides and tips from '.setting('site_name').': '.$curCat['total'].' article'.($curCat['total']==1?'':'s').' with honest pros, cons and recommendations.';
  }
- $listed=query($join.'WHERE '.live().($curCat?' AND c.slug=?':'').' ORDER BY '.($page==='top10'?'r.score DESC,':'').'r.published_at DESC LIMIT '.($page==='top10'?10:20),$curCat?[$catSlug]:[]);
+ $listed=query($join.'WHERE '.live().($page==='top10'?' AND '.rated():'').($curCat?' AND c.slug=?':'').' ORDER BY '.($page==='top10'?'r.score DESC,':'').'r.published_at DESC LIMIT '.($page==='top10'?10:20),$curCat?[$catSlug]:[]);
  $selfPath=$curCat&&$page==='reviews'?'/category/'.rawurlencode($catSlug):pagePath($page);
  $seo['jsonld']=[['@type'=>'CollectionPage','@id'=>$base.$selfPath.'#page','url'=>$base.$selfPath,'name'=>$pageTitle,'description'=>$pageDesc,'isPartOf'=>['@id'=>$base.'/#website'],'mainEntity'=>['@type'=>'ItemList','itemListOrder'=>$page==='top10'?'https://schema.org/ItemListOrderDescending':'https://schema.org/ItemListUnordered','numberOfItems'=>count($listed),'itemListElement'=>array_map(fn($i,$x)=>['@type'=>'ListItem','position'=>$i+1,'url'=>$base.reviewUrl($x),'name'=>$x['title']],array_keys($listed),$listed)]],$crumb(array_merge([['Home','/']],$curCat?[[$page==='top10'?'Top 10 Lists':'Reviews',pagePath($page)],[$curCat['name'],$selfPath]]:[[$titles[$page],pagePath($page)]]))];
  if($page==='top10'&&$curCat)$seo['canonical']=pagePath('top10').'?category='.rawurlencode($catSlug);
- if(trim((string)($_GET['q']??''))!==''||isset($_GET['sort'])||($catSlug!==''&&!$curCat))$seo['robots']='noindex, follow';
+ if(trim((string)($_GET['q']??''))!==''||isset($_GET['sort'])||($catSlug!==''&&(!$curCat||!(int)$curCat['total'])))$seo['robots']='noindex, follow';
 }elseif($page==='404')$seo['robots']='noindex, follow';
-elseif($page==='home')$seo['jsonld']=[['@type'=>'WebPage','@id'=>$base.'/#webpage','url'=>$base.'/','name'=>setting('seo_title')?:setting('site_name'),'description'=>setting('description'),'isPartOf'=>['@id'=>$base.'/#website'],'about'=>['@id'=>$base.'/#org']]];
+elseif($page==='home')$seo['jsonld']=[['@type'=>'WebPage','@id'=>$base.'/#webpage','url'=>$base.'/','name'=>homeTitle(),'description'=>setting('description'),'isPartOf'=>['@id'=>$base.'/#website'],'about'=>['@id'=>$base.'/#org']]];
 elseif($page==='about')$seo['jsonld']=[['@type'=>'AboutPage','url'=>$base.'/about','name'=>'About '.setting('site_name'),'about'=>['@id'=>$base.'/#org']]];
 headerView($pageTitle,$pageDesc,$page==='review'?'reviews':$page,$seo);
 // Splits the homepage headline so its last two words can be highlighted.
@@ -163,7 +164,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
   <h1 class="hero-title"><?= $headline(setting('tagline')) ?></h1>
   <p class="hero-sub"><?= e(setting('description')) ?></p>
   <form action="/reviews" class="hero-search" role="search"><?= ficon('search') ?><label for="hero-q" class="sr-only">Search reviews</label><input id="hero-q" name="q" placeholder="What are you looking for?"><button class="btn btn-primary" type="submit">Search <?= ficon('arrow','ic ic-sm') ?></button></form>
-  <div class="popular"><span>Popular:</span><a href="/reviews?q=headphones">Headphones</a><a href="/category/travel">Travel essentials</a><a href="/category/home-improvement">Home upgrades</a><a href="/category/tech">Tech</a></div>
+  <?php if($pop=popularLinks()): ?><div class="popular"><span>Popular:</span><?php foreach($pop as $l): ?><a href="<?= e($l['url']) ?>"><?= e($l['label']) ?></a><?php endforeach ?></div><?php endif ?>
  </div>
  <div class="hero-media" data-slider>
   <span class="hero-tag"><?= ficon('star','ic ic-sm') ?> Thoughtfully Compared</span>
@@ -174,7 +175,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
 </div></section>
 
 <section class="wrap"><nav class="cat-strip" aria-label="Browse categories">
- <?php foreach(array_slice($cats,0,9) as $c): [$ic,$tone]=catStyle($c); ?><a href="/category/<?= e($c['slug']) ?>"><span class="cat-dot tone-<?= $tone ?>"><?= ficon($ic) ?></span><?= e($c['name']) ?></a><?php endforeach ?>
+ <?php foreach(array_slice($shownCats,0,9) as $c): [$ic,$tone]=catStyle($c); ?><a href="/category/<?= e($c['slug']) ?>"><span class="cat-dot tone-<?= $tone ?>"><?= ficon($ic) ?></span><?= e($c['name']) ?></a><?php endforeach ?>
  <a href="/categories"><span class="cat-dot tone-slate"><?= ficon('dots') ?></span>More</a>
 </nav></section>
 
@@ -213,7 +214,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
 
 <section class="wrap section">
  <div class="section-head"><div><p class="eyebrow">Something for every day</p><h2 class="section-title">Explore your interests</h2><p class="section-sub">Browse our top categories and find reviews tailored to your needs.</p></div><a class="btn btn-outline" href="/categories">View all categories <?= ficon('arrow','ic ic-sm') ?></a></div>
- <div class="interest-grid"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a class="interest" href="/category/<?= e($c['slug']) ?>"><span class="cat-dot cat-dot-lg tone-<?= $tone ?>"><?= ficon($ic) ?></span><span><b><?= e($c['name']) ?></b><small><?= (int)$c['total'] ?> review<?= (int)$c['total']===1?'':'s' ?></small></span><?= ficon('right','ic ic-sm chev') ?></a><?php endforeach ?></div>
+ <div class="interest-grid"><?php foreach($shownCats as $c): [$ic,$tone]=catStyle($c); ?><a class="interest" href="/category/<?= e($c['slug']) ?>"><span class="cat-dot cat-dot-lg tone-<?= $tone ?>"><?= ficon($ic) ?></span><span><b><?= e($c['name']) ?></b><small><?= (int)$c['total'] ?> review<?= (int)$c['total']===1?'':'s' ?></small></span><?= ficon('right','ic ic-sm chev') ?></a><?php endforeach ?></div>
 </section>
 
 <section class="wrap section"><div class="why">
@@ -227,7 +228,11 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
  if($q!==''){$where.=' AND (r.title LIKE ? OR r.excerpt LIKE ?)';$params[]='%'.$q.'%';$params[]='%'.$q.'%';}
  if($cat!==''){$where.=' AND c.slug=?';$params[]=$cat;}
  $order=$page==='top10'||$sort==='score'?'r.score DESC,r.published_at DESC,r.id DESC':($sort==='az'?'r.title COLLATE NOCASE':'r.published_at DESC,r.id DESC');
- $results=query($join.$where.' ORDER BY '.$order.($page==='top10'?' LIMIT 10':''),$params);
+ if($page==='top10'){
+  // Only reviews with a real score (and pros/cons) are ranked; editorial guides are listed separately, unranked.
+  $results=query($join.$where.' AND '.rated().' ORDER BY r.score DESC,r.published_at DESC,r.id DESC LIMIT 10',$params);
+  $guides=query($join.$where.' AND NOT ('.rated().') ORDER BY r.published_at DESC,r.id DESC LIMIT 9',$params);
+ }else $results=query($join.$where.' ORDER BY '.$order,$params);
  $current=null;foreach($cats as $c)if($c['slug']===$cat)$current=$c;
  $listUrl=function(string $catSlug) use($page,$q): string {
   $params=$q!==''?['q'=>$q]:[];
@@ -240,20 +245,25 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
  <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><?php if($current): ?><a href="<?= pagePath($page) ?>"><?= $page==='top10'?'Top 10 Lists':'Reviews' ?></a><?= ficon('right','ic ic-xs') ?><span><?= e($current['name']) ?></span><?php else: ?><span><?= $page==='top10'?'Top 10 Lists':'Reviews' ?></span><?php endif ?></nav>
  <p class="eyebrow"><?= $page==='top10'?'The shortlist':'Find your next favourite' ?></p>
  <h1 class="page-title"><?= e($current?($page==='top10'?'Top 10 in '.$current['name']:$current['name']):($page==='top10'?'The top 10 edit':($q!==''?'Results for “'.$q.'”':'Explore our reviews'))) ?></h1>
- <p class="section-sub"><?= $page==='top10'?'Our ten highest-rated and most recent picks, ranked.':'Useful details, honest trade-offs and clear comparisons, all in one place.' ?></p>
+ <p class="section-sub"><?= $page==='top10'?'Rated reviews ranked by their review score, plus our latest buying guides listed separately.':'Useful details, honest trade-offs and clear comparisons, all in one place.' ?></p>
  <form class="filter-bar" action="<?= pagePath($page) ?>">
   <label class="field-ic"><?= ficon('search') ?><input name="q" value="<?= e($q) ?>" placeholder="Search products, ideas and more" aria-label="Search"></label>
-  <label class="field-ic"><?= ficon('grid') ?><select name="category" aria-label="Category"><option value="">All categories</option><?php foreach($cats as $c): ?><option value="<?= e($c['slug']) ?>" <?= $cat===$c['slug']?'selected':'' ?>><?= e($c['name']) ?></option><?php endforeach ?></select></label>
+  <label class="field-ic"><?= ficon('grid') ?><select name="category" aria-label="Category"><option value="">All categories</option><?php foreach($shownCats as $c): ?><option value="<?= e($c['slug']) ?>" <?= $cat===$c['slug']?'selected':'' ?>><?= e($c['name']) ?></option><?php endforeach ?></select></label>
   <?php if($page==='reviews'): ?><label class="field-ic"><?= ficon('clock') ?><select name="sort" aria-label="Sort by"><option value="latest">Latest</option><option value="score" <?= $sort==='score'?'selected':'' ?>>Highest rated</option><option value="az" <?= $sort==='az'?'selected':'' ?>>A–Z</option></select></label><?php endif ?>
   <button class="btn btn-primary">Apply</button>
  </form>
- <div class="chip-row"><a class="<?= $cat===''?'is-active':'' ?>" href="<?= e($listUrl('')) ?>">All</a><?php foreach($cats as $c): ?><a class="<?= $cat===$c['slug']?'is-active':'' ?>" href="<?= e($listUrl($c['slug'])) ?>"><?= e($c['name']) ?></a><?php endforeach ?></div>
+ <div class="chip-row"><a class="<?= $cat===''?'is-active':'' ?>" href="<?= e($listUrl('')) ?>">All</a><?php foreach($shownCats as $c): ?><a class="<?= $cat===$c['slug']?'is-active':'' ?>" href="<?= e($listUrl($c['slug'])) ?>"><?= e($c['name']) ?></a><?php endforeach ?></div>
 </div></section>
 <section class="wrap section section-tight">
- <div class="result-bar"><span><?= count($results) ?> <?= count($results)===1?'result':'results' ?></span><a class="link-arrow" href="/compare?category=<?= e($cat) ?>">Compare reviews <?= ficon('arrow','ic ic-sm') ?></a></div>
+ <?php if($page==='top10'): ?>
+ <div class="section-head"><div><h2 class="section-title">Highest-rated reviews</h2><p class="section-sub">Ranked by our review score out of 10. Only reviews that have a score and listed pros or cons are ranked.</p></div></div>
+ <?php if(!$results): ?><div class="empty"><span class="cat-dot cat-dot-lg tone-teal"><?= ficon('trophy') ?></span><h2>No rated reviews yet</h2><p>There are no scored reviews<?= $current?' in '.e($current['name']):'' ?> to rank yet. Browse the guides below or all reviews instead.</p><a class="btn btn-primary" href="/reviews">Browse reviews</a></div>
+ <?php else: ?><ol class="rank-list"><?php foreach($results as $i=>$r): ?><li class="rank"><span class="rank-num"><?= $i+1 ?></span><a class="rank-img" href="<?= e(reviewUrl($r)) ?>" tabindex="-1" aria-hidden="true"><img src="<?= e($r['image']) ?>" alt="" loading="lazy"></a><div class="rank-body"><span class="badge badge-<?= catStyle(['slug'=>$r['category_slug'],'id'=>$r['category_id']])[1] ?>"><?= e($r['category']) ?></span><h2><a href="<?= e(reviewUrl($r)) ?>"><?= e($r['title']) ?></a></h2><p><?= e($r['excerpt']) ?></p></div><div class="rank-side"><?php if($r['score']>0): ?><span class="score-big"><?= number_format((float)$r['score'],1) ?><small>/10</small></span><?php endif ?><a class="btn btn-outline" href="<?= e(reviewUrl($r)) ?>">Read <?= ficon('arrow','ic ic-sm') ?></a></div></li><?php endforeach ?></ol><?php endif ?>
+ <?php if($guides): ?><div class="section-head guides-head"><div><h2 class="section-title">Latest buying guides</h2><p class="section-sub">Editorial guides and articles. These are not rated or ranked.</p></div></div><div class="card-grid"><?php foreach($guides as $r) reviewCard($r); ?></div><?php endif ?>
+ <?php else: ?>
+ <div class="result-bar"><span><?= count($results) ?> <?= count($results)===1?'result':'results' ?></span><a class="link-arrow" href="/compare<?= $cat!==''?'?category='.e(rawurlencode($cat)):'' ?>">Compare reviews <?= ficon('arrow','ic ic-sm') ?></a></div>
  <?php if(!$results): ?><div class="empty"><span class="cat-dot cat-dot-lg tone-teal"><?= ficon('search') ?></span><h2>No reviews found</h2><p>Try another keyword or explore a different category.</p><a class="btn btn-primary" href="<?= pagePath($page) ?>">Clear filters</a></div>
- <?php elseif($page==='top10'): ?><ol class="rank-list"><?php foreach($results as $i=>$r): ?><li class="rank"><span class="rank-num"><?= $i+1 ?></span><a class="rank-img" href="<?= e(reviewUrl($r)) ?>" tabindex="-1" aria-hidden="true"><img src="<?= e($r['image']) ?>" alt="" loading="lazy"></a><div class="rank-body"><span class="badge badge-<?= catStyle(['slug'=>$r['category_slug'],'id'=>$r['category_id']])[1] ?>"><?= e($r['category']) ?></span><h2><a href="<?= e(reviewUrl($r)) ?>"><?= e($r['title']) ?></a></h2><p><?= e($r['excerpt']) ?></p></div><div class="rank-side"><?php if($r['score']>0): ?><span class="score-big"><?= number_format((float)$r['score'],1) ?><small>/10</small></span><?php endif ?><a class="btn btn-outline" href="<?= e(reviewUrl($r)) ?>">Read <?= ficon('arrow','ic ic-sm') ?></a></div></li><?php endforeach ?></ol>
- <?php else: ?><div class="card-grid"><?php foreach($results as $r) reviewCard($r); ?></div><?php endif ?>
+ <?php else: ?><div class="card-grid"><?php foreach($results as $r) reviewCard($r); ?></div><?php endif ?><?php endif ?>
 </section>
 
 <?php elseif($page==='review'): $r=$review; $tone=catStyle(['slug'=>$r['category_slug'],'id'=>$r['category_id']])[1];
@@ -303,16 +313,20 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
 <section class="wrap section"><div class="section-head"><h2 class="section-title">Keep exploring</h2><a class="link-arrow" href="/reviews">View all articles <?= ficon('arrow','ic ic-sm') ?></a></div><div class="card-grid"><?php foreach($more as $x)reviewCard($x); ?></div></section>
 
 <?php elseif($page==='compare'):
- $cat=(string)($_GET['category']??'');$comp=query($join.'WHERE '.live().' AND r.score>0'.($cat!==''?' AND c.slug=?':'').' ORDER BY r.score DESC LIMIT 3',$cat!==''?[$cat]:[]);
+ // Comparable = live, scored, with pros or cons; compared only within one category (needs at least 2).
+ $eligible=[];foreach(query('SELECT c.slug,c.name,COUNT(*) AS n FROM reviews r JOIN categories c ON c.id=r.category_id WHERE '.live().' AND '.rated().' GROUP BY c.id HAVING n>=2 ORDER BY n DESC,c.name') as $x)$eligible[$x['slug']]=$x;
+ $cat=(string)($_GET['category']??'');
+ if(!isset($eligible[$cat]))$cat=$cat===''&&$eligible?(string)array_key_first($eligible):($cat===''?'':$cat);
+ $comp=isset($eligible[$cat])?query($join.'WHERE '.live().' AND '.rated().' AND c.slug=? ORDER BY r.score DESC,r.published_at DESC LIMIT 3',[$cat]):[];
 ?>
 <section class="page-hero"><div class="wrap">
  <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><span>Compare</span></nav>
- <p class="eyebrow">Side by side</p><h1 class="page-title">A clearer comparison</h1><p class="section-sub">Compare the three highest-rated reviews in a category.</p>
- <form class="filter-bar" action="/compare"><label class="field-ic"><?= ficon('grid') ?><select name="category" aria-label="Category"><option value="">All categories</option><?php foreach($cats as $c): ?><option value="<?= e($c['slug']) ?>" <?= $cat===$c['slug']?'selected':'' ?>><?= e($c['name']) ?></option><?php endforeach ?></select></label><button class="btn btn-primary">Compare</button></form>
+ <p class="eyebrow">Side by side</p><h1 class="page-title">A clearer comparison</h1><p class="section-sub">Compare up to three of the highest-rated reviews within the same category. Only reviews with a score and listed pros or cons are included.</p>
+ <?php if($eligible): ?><form class="filter-bar" action="/compare"><label class="field-ic"><?= ficon('grid') ?><select name="category" aria-label="Category"><?php foreach($eligible as $x): ?><option value="<?= e($x['slug']) ?>" <?= $cat===$x['slug']?'selected':'' ?>><?= e($x['name']) ?> (<?= (int)$x['n'] ?>)</option><?php endforeach ?></select></label><button class="btn btn-primary">Compare</button></form><?php endif ?>
 </div></section>
 <section class="wrap section section-tight">
- <?php if(!$comp): ?><div class="empty"><span class="cat-dot cat-dot-lg tone-teal"><?= ficon('scale') ?></span><h2>Nothing to compare yet</h2><p>There are no scored reviews in this category yet. Try another category or browse all reviews.</p><a class="btn btn-primary" href="/reviews<?= $cat!==''?'&category='.e($cat):'' ?>">Browse reviews</a></div>
- <?php else: ?><div class="compare-grid"><?php foreach($comp as $i=>$r): ?><article class="compare-card<?= $i===0?' is-top':'' ?>"><?php if($i===0): ?><span class="top-pick"><?= ficon('trophy','ic ic-sm') ?> Top pick</span><?php endif ?><img src="<?= e($r['image']) ?>" alt="" loading="lazy"><div class="compare-body"><span class="badge badge-<?= catStyle(['slug'=>$r['category_slug'],'id'=>$r['category_id']])[1] ?>"><?= e($r['category']) ?></span><h2><?= e($r['title']) ?></h2><p class="score-big"><?= number_format((float)$r['score'],1) ?><small>/10</small></p><h3>Pros</h3><ul class="pc pc-pro"><?php foreach(array_filter(explode("\n",$r['pros'])) as $p): ?><li><?= ficon('check','ic ic-sm') ?><?= e($p) ?></li><?php endforeach ?></ul><h3>Cons</h3><ul class="pc pc-con"><?php foreach(array_filter(explode("\n",$r['cons'])) as $p): ?><li><?= ficon('minus','ic ic-sm') ?><?= e($p) ?></li><?php endforeach ?></ul><a class="btn btn-primary btn-block" href="<?= e(reviewUrl($r)) ?>">Read full review</a></div></article><?php endforeach ?></div><?php endif ?>
+ <?php if(count($comp)<2): ?><div class="empty"><span class="cat-dot cat-dot-lg tone-teal"><?= ficon('scale') ?></span><h2>Not enough reviews to compare<?= $cat!==''&&!isset($eligible[$cat])?' in this category':'' ?></h2><p>A comparison needs at least two rated reviews in the same category. <?= $eligible?'Choose a category above, or browse':'Browse' ?> our reviews and buying guides instead.</p><a class="btn btn-primary" href="/reviews">Browse reviews</a> <a class="btn btn-outline" href="/top-10">See Top 10</a></div>
+ <?php else: ?><div class="compare-grid"><?php foreach($comp as $i=>$r): ?><article class="compare-card<?= $i===0?' is-top':'' ?>"><?php if($i===0): ?><span class="top-pick"><?= ficon('trophy','ic ic-sm') ?> Top pick</span><?php endif ?><img src="<?= e($r['image']) ?>" alt="" loading="lazy"><div class="compare-body"><span class="badge badge-<?= catStyle(['slug'=>$r['category_slug'],'id'=>$r['category_id']])[1] ?>"><?= e($r['category']) ?></span><h2><?= e($r['title']) ?></h2><p class="score-big"><?= number_format((float)$r['score'],1) ?><small>/10</small></p><h3>Pros</h3><?php $pl=array_filter(array_map('trim',explode("\n",$r['pros']))); if($pl): ?><ul class="pc pc-pro"><?php foreach($pl as $p): ?><li><?= ficon('check','ic ic-sm') ?><?= e($p) ?></li><?php endforeach ?></ul><?php else: ?><p class="muted">Not provided</p><?php endif ?><h3>Cons</h3><?php $cl=array_filter(array_map('trim',explode("\n",$r['cons']))); if($cl): ?><ul class="pc pc-con"><?php foreach($cl as $p): ?><li><?= ficon('minus','ic ic-sm') ?><?= e($p) ?></li><?php endforeach ?></ul><?php else: ?><p class="muted">Not provided</p><?php endif ?><a class="btn btn-primary btn-block" href="<?= e(reviewUrl($r)) ?>">Read full review</a></div></article><?php endforeach ?></div><?php endif ?>
 </section>
 
 <?php elseif($page==='categories'): ?>
@@ -320,7 +334,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
  <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><span>Categories</span></nav>
  <p class="eyebrow">Discover something useful</p><h1 class="page-title">Everyday interests. Explored.</h1><p class="section-sub">Find reviews and ideas in the categories that matter to you.</p>
 </div></section>
-<section class="wrap section section-tight"><div class="cat-cards"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a class="cat-card" href="/category/<?= e($c['slug']) ?>"><span class="cat-dot cat-dot-xl tone-<?= $tone ?>"><?= ficon($ic) ?></span><h2><?= e($c['name']) ?></h2><p><?= (int)$c['total'] ?> review<?= (int)$c['total']===1?'':'s' ?></p><span class="link-arrow">Explore <?= ficon('arrow','ic ic-sm') ?></span></a><?php endforeach ?></div></section>
+<section class="wrap section section-tight"><div class="cat-cards"><?php foreach($shownCats as $c): [$ic,$tone]=catStyle($c); ?><a class="cat-card" href="/category/<?= e($c['slug']) ?>"><span class="cat-dot cat-dot-xl tone-<?= $tone ?>"><?= ficon($ic) ?></span><h2><?= e($c['name']) ?></h2><p><?= (int)$c['total'] ?> review<?= (int)$c['total']===1?'':'s' ?></p><span class="link-arrow">Explore <?= ficon('arrow','ic ic-sm') ?></span></a><?php endforeach ?></div></section>
 
 <?php elseif($page==='about'||$page==='privacy'): ?>
 <section class="page-hero"><div class="wrap narrow-wrap">

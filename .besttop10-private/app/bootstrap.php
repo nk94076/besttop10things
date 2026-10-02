@@ -274,3 +274,27 @@ function seoAnalyse(array $p): array {
  return [$seo,$ai];
 }
 function seoScore(array $checks): int { $n=0;foreach($checks as [$s])$n+=$s==='pass'?1:($s==='warn'?0.5:0);return (int)round($n/count($checks)*100); }
+
+// Versioned asset URL: /assets/app.js?v=<content hash>. The URL changes whenever the file changes, so the
+// long browser/CDN cache on /assets/ can never serve an outdated script or stylesheet to returning visitors.
+function asset(string $path): string {
+ static $cache=[];
+ if(!isset($cache[$path])){$docroot=is_dir((string)($_SERVER['DOCUMENT_ROOT']??''))&&is_file($_SERVER['DOCUMENT_ROOT'].'/index.php')?$_SERVER['DOCUMENT_ROOT']:ROOT.'/../www.besttop10things.com';$file=$docroot.$path;$cache[$path]=$path.(is_file($file)?'?v='.substr(md5_file($file),0,10):'');}
+ return $cache[$path];
+}
+
+// Homepage <title>: the CMS "Homepage title", unless it is empty or just repeats the meta description,
+// in which case a clear branded default is used.
+function homeTitle(): string {
+ $t=trim(setting('seo_title'));$norm=fn($s)=>mb_strtolower(trim(preg_replace('/[\s[:punct:]]+/u',' ',$s)));
+ if($t===''||$norm($t)===$norm(setting('description')))return setting('site_name').' | Reviews, Comparisons & Buying Guides';
+ return $t;
+}
+// Popular shortcuts that always lead somewhere: the categories with the most live posts.
+function popularLinks(int $n=4): array {
+ $cats=array_filter(categories(),fn($c)=>(int)$c['total']>0);
+ usort($cats,fn($a,$b)=>(int)$b['total']<=>(int)$a['total']);
+ return array_map(fn($c)=>['label'=>$c['name'],'url'=>'/category/'.rawurlencode($c['slug'])],array_slice($cats,0,$n));
+}
+// A review is comparable/rankable only when it has a real score and at least pros or cons.
+function rated(string $alias='r'): string { return "$alias.score>0 AND (trim($alias.pros)!='' OR trim($alias.cons)!='')"; }

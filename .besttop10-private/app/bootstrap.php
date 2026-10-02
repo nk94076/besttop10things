@@ -36,7 +36,21 @@ function now(): string { return date('Y-m-d\TH:i:s'); }
 // SQL condition for posts visible on the public site: published and not scheduled for later.
 function live(): string { return "r.status='published' AND (r.published_at IS NULL OR r.published_at<='".now()."')"; }
 function categories(): array { return query('SELECT c.*, COUNT(r.id) AS total FROM categories c LEFT JOIN reviews r ON r.category_id=c.id AND '.live().' GROUP BY c.id ORDER BY c.id'); }
-function reviewUrl(array $r): string { return '/?page=review&slug='.rawurlencode($r['slug']); }
+function reviewUrl(array $r): string { return '/'.rawurlencode($r['slug']); }
+// Clean public URLs. Post slugs may not use these names.
+const RESERVED_SLUGS=['reviews','top-10','categories','category','compare','about','privacy','admin','admin-php','index-php','sitemap-xml','robots-txt','assets','uploads','search','feed'];
+function pagePath(string $page): string { return ['home'=>'/','reviews'=>'/reviews','top10'=>'/top-10','categories'=>'/categories','compare'=>'/compare','about'=>'/about','privacy'=>'/privacy'][$page]??'/'; }
+// Converts an old "/?page=…" link to its clean form; any other URL is returned unchanged.
+function cleanUrl(string $url): string {
+ if(!str_starts_with($url,'/?'))return $url;
+ parse_str((string)parse_url($url,PHP_URL_QUERY),$q); $frag=(string)parse_url($url,PHP_URL_FRAGMENT);
+ $page=(string)($q['page']??''); unset($q['page']);
+ if($page==='')return $url;
+ if($page==='review'&&!empty($q['slug'])){$path='/'.rawurlencode((string)$q['slug']);unset($q['slug']);}
+ elseif($page==='reviews'&&!empty($q['category'])){$path='/category/'.rawurlencode((string)$q['category']);unset($q['category']);}
+ else $path=pagePath($page);
+ return $path.($q?'?'.http_build_query($q):'').($frag!==''?'#'.$frag:'');
+}
 function safeImage(string $url): bool { return (bool)preg_match('~^https://[^\s]+$~i', $url) || (bool)preg_match('~^/assets/[a-zA-Z0-9_./-]+\.(jpg|jpeg|png|webp|svg)$~', $url) || (bool)preg_match('~^/uploads/[a-f0-9]{32}\.(jpg|png|webp)$~', $url); }
 function icon(string $name, string $class='h-5 w-5'): string {
  $paths=['search'=>'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>','arrow'=>'<path d="M4 12h16m-6-6 6 6-6 6"/>','tech'=>'<rect x="4" y="3" width="16" height="13" rx="1"/><path d="M2 20h20M8 16v4m8-4v4"/>','shopping'=>'<path d="M4 7h16l1 14H3L4 7Zm4 0V5a4 4 0 0 1 8 0v2"/>','travel'=>'<path d="m3 10 7 2 5 9 2-1-2-8 6-6c2-3-1-5-3-3l-6 6-8-2-1 3Z"/>','gadgets'=>'<rect x="6" y="5" width="12" height="14" rx="3"/><path d="M9 5V1h6v4M9 19v4h6v-4m-6-6 2-3 2 1 2-3"/>','home'=>'<path d="m2 11 10-9 10 9M5 9v12h14V9M9 21v-8h6v8"/>','grid'=>'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>','check'=>'<path d="m5 12 4 4L19 6"/>','menu'=>'<path d="M3 6h18M3 12h18M3 18h18"/>','book'=>'<path d="M12 5c-4-3-8-2-10-1v16c3-2 7-2 10 0 3-2 7-2 10 0V4c-3-1-7-2-10 1Zm0 0v15"/>'];
@@ -86,7 +100,7 @@ function renderBody(string $body): string {
 // Header menu as configured in CMS → Appearance. Each item: label, url, type ("link" or "categories").
 function siteMenu(): array {
  $menu=json_decode(setting('menu'),true);
- if(is_array($menu)&&$menu)return $menu;
- return [['label'=>'Reviews','url'=>'/?page=reviews','type'=>'categories'],['label'=>'Top 10 Lists','url'=>'/?page=top10','type'=>'link'],['label'=>'Categories','url'=>'/?page=categories','type'=>'link'],['label'=>'How We Review','url'=>'/?page=about#how','type'=>'link'],['label'=>'About','url'=>'/?page=about','type'=>'link']];
+ if(is_array($menu)&&$menu)return array_map(fn($i)=>['url'=>cleanUrl((string)$i['url'])]+$i,$menu);
+ return [['label'=>'Reviews','url'=>'/reviews','type'=>'categories'],['label'=>'Top 10 Lists','url'=>'/top-10','type'=>'link'],['label'=>'Categories','url'=>'/categories','type'=>'link'],['label'=>'How We Review','url'=>'/about#how','type'=>'link'],['label'=>'About','url'=>'/about','type'=>'link']];
 }
 function safeMenuUrl(string $url): bool { return (bool)preg_match('~^(/(?!/)[^\s]*|https://[^\s]+)$~',$url); }

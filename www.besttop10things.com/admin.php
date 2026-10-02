@@ -53,6 +53,7 @@ function savePost(array $in, int $id): int {
  $image=trim((string)($in['image']??''))?:'/assets/hero.jpg';
  if(!safeImage($image))throw new RuntimeException('Featured image must be an HTTPS URL or an image from the media library.');
  $slug=slug(trim((string)($in['slug']??''))?:$title);
+ if(in_array($slug,RESERVED_SLUGS,true))throw new RuntimeException("The permalink “{$slug}” is reserved for a site page. Choose another.");
  if(query('SELECT id FROM reviews WHERE slug=? AND id!=?',[$slug,$id]))throw new RuntimeException('This permalink is already used. Choose another.');
  $date=(string)($in['published_at']??'');
  $publishedAt=preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/',$date)?$date.':00':now();
@@ -303,7 +304,7 @@ if(!isset($titles[$view]))$view='dashboard';
   </select><button class="button button-outline" data-bulk-apply>Apply</button><span class="cms-spacer"></span><span class="muted"><?= $total ?> item<?= $total===1?'':'s' ?></span>
  </div>
  <div class="table-wrap"><table class="list-table"><thead><tr><th class="check"><input type="checkbox" data-check-all aria-label="Select all"></th><th class="th-title"><?= $sortLink('title','Title') ?></th><th><?= $sortLink('category','Category') ?></th><th><?= $sortLink('score','Score') ?></th><th><?= $sortLink('date','Date') ?></th><th class="kebab-col"><span class="sr-only">Actions</span></th></tr></thead><tbody>
- <?php foreach($rows as $r): $state=postState($r); $view_url=reviewUrl($r).($state==='published'?'':'&preview=1'); ?>
+ <?php foreach($rows as $r): $state=postState($r); $view_url=reviewUrl($r).($state==='published'?'':'?preview=1'); ?>
   <tr><td class="check"><input type="checkbox" name="ids[]" value="<?= $r['id'] ?>" aria-label="Select <?= e($r['title']) ?>"></td>
    <td class="title-col"><div class="title-cell"><img class="thumb" src="<?= e($r['image']) ?>" alt="" loading="lazy"><div><a class="row-title" href="/admin.php?view=edit&id=<?= $r['id'] ?>"><?= e($r['title']) ?></a><?php if($state!=='published'): ?> <span class="pill pill-<?= $state ?>"><?= ucfirst($state) ?></span><?php endif ?><?php if($r['featured']): ?> <span class="tag">Featured</span><?php endif ?><?php if($r['demo']): ?> <span class="tag">Sample</span><?php endif ?></div></div></td>
    <td><a class="chip chip-<?= $chip((int)$r['category_id']) ?>" href="<?= e($q(['cat'=>$r['category_id'],'p'=>null])) ?>"><?= e($r['category']) ?></a></td>
@@ -336,8 +337,8 @@ if(!isset($titles[$view]))$view='dashboard';
  <form method="post" enctype="multipart/form-data" class="editor" data-editor data-now="<?= e(substr(now(),0,16)) ?>"><?= csrfField() ?><input type="hidden" name="action" value="save_post"><input type="hidden" name="id" value="<?= e($r['id']) ?>">
   <div class="editor-main">
    <input class="input title-input" name="title" value="<?= e($r['title']) ?>" placeholder="Add title" required maxlength="200" aria-label="Title" data-title>
-   <p class="permalink">Permalink: <span class="muted"><?= e($_SERVER['HTTP_HOST']??'') ?>/?page=review&amp;slug=</span><input class="input input-sm" name="slug" value="<?= e($r['slug']) ?>" placeholder="auto-generated-from-title" aria-label="URL slug" data-slug>
-    <?php if($id): ?><a class="button button-sm" href="<?= e(reviewUrl($r)) ?><?= $state==='published'?'':'&preview=1' ?>" target="_blank"><?= $state==='published'?'View Post':'Preview' ?></a><?php endif ?></p>
+   <p class="permalink">Permalink: <span class="muted"><?= e($_SERVER['HTTP_HOST']??'') ?>/</span><input class="input input-sm" name="slug" value="<?= e($r['slug']) ?>" placeholder="auto-generated-from-title" aria-label="URL slug" data-slug>
+    <?php if($id): ?><a class="button button-sm" href="<?= e(reviewUrl($r)) ?><?= $state==='published'?'':'?preview=1' ?>" target="_blank"><?= $state==='published'?'View Post':'Preview' ?></a><?php endif ?></p>
    <div class="box editor-box">
     <div class="toolbar" role="toolbar" aria-label="Formatting">
      <button type="button" data-md="h2" title="Heading">H2</button><button type="button" data-md="h3" title="Subheading">H3</button><button type="button" data-md="bold" title="Bold"><b>B</b></button><button type="button" data-md="link" title="Insert link">Link</button><button type="button" data-md="list" title="Bulleted list">• List</button><button type="button" data-md="image" title="Insert image">Image</button>
@@ -440,19 +441,19 @@ if(!isset($titles[$view]))$view='dashboard';
    </div>
    <div class="stack">
     <section class="box"><h2 class="box-title"><?= aicon('menu','icon title-icon') ?> Header Menu</h2>
-     <p class="hint">Links can be site pages (start with <code>/</code>, e.g. <code>/?page=top10</code>) or full <code>https://</code> URLs. "Categories dropdown" shows every category under that item.</p>
+     <p class="hint">Links can be site pages (start with <code>/</code>, e.g. <code>/top-10</code>) or full <code>https://</code> URLs. "Categories dropdown" shows every category under that item.</p>
      <div class="menu-rows" data-menu-rows>
       <?php foreach($menuRows as $item): ?>
       <div class="menu-row" data-menu-row><span class="drag" aria-hidden="true">⋮⋮</span>
        <input class="input" name="menu_label[]" value="<?= e($item['label']) ?>" placeholder="Label" aria-label="Menu label" maxlength="40">
-       <input class="input" name="menu_url[]" value="<?= e($item['url']) ?>" placeholder="/?page=… or https://…" aria-label="Menu link">
+       <input class="input" name="menu_url[]" value="<?= e($item['url']) ?>" placeholder="/reviews or https://…" aria-label="Menu link">
        <select class="input" name="menu_type[]" aria-label="Item type"><option value="link">Link</option><option value="categories" <?= ($item['type']??'')==='categories'?'selected':'' ?>>Categories dropdown</option></select>
        <span class="menu-btns"><button type="button" class="icon-danger" data-move="-1" aria-label="Move up" title="Move up">↑</button><button type="button" class="icon-danger" data-move="1" aria-label="Move down" title="Move down">↓</button><button type="button" class="icon-danger" data-remove aria-label="Remove item" title="Remove"><?= aicon('trash') ?></button></span>
       </div>
       <?php endforeach ?>
      </div>
      <div><button type="button" class="button button-outline" data-menu-add><?= aicon('plus') ?> Add menu item</button></div>
-     <p class="hint">Quick links: <code>/?page=reviews</code> · <code>/?page=top10</code> · <code>/?page=categories</code> · <code>/?page=compare</code> · <code>/?page=about</code> · <code>/?page=about#how</code> · <code>/?page=reviews&amp;category=tech</code></p>
+     <p class="hint">Quick links: <code>/reviews</code> · <code>/top-10</code> · <code>/categories</code> · <code>/compare</code> · <code>/about</code> · <code>/about#how</code> · <code>/category/tech</code></p>
     </section>
     <section class="box"><h2 class="box-title"><?= aicon('search','icon title-icon') ?> SEO</h2><div class="stack">
      <label><span class="lbl">Homepage title <span class="muted" data-count-for="seo_title"></span></span><input class="input" name="seo_title" value="<?= e(setting('seo_title')) ?>" maxlength="200" placeholder="<?= e(setting('site_name')) ?>" data-count="60"></label>
@@ -464,7 +465,7 @@ if(!isset($titles[$view]))$view='dashboard';
   </div>
   <div class="save-bar"><button class="button button-primary button-lg"><?= aicon('send') ?> Save Appearance</button></div>
  </form>
- <template data-menu-template><div class="menu-row" data-menu-row><span class="drag" aria-hidden="true">⋮⋮</span><input class="input" name="menu_label[]" placeholder="Label" aria-label="Menu label" maxlength="40"><input class="input" name="menu_url[]" placeholder="/?page=… or https://…" aria-label="Menu link"><select class="input" name="menu_type[]" aria-label="Item type"><option value="link">Link</option><option value="categories">Categories dropdown</option></select><span class="menu-btns"><button type="button" class="icon-danger" data-move="-1" aria-label="Move up" title="Move up">↑</button><button type="button" class="icon-danger" data-move="1" aria-label="Move down" title="Move down">↓</button><button type="button" class="icon-danger" data-remove aria-label="Remove item" title="Remove"><?= aicon('trash') ?></button></span></div></template>
+ <template data-menu-template><div class="menu-row" data-menu-row><span class="drag" aria-hidden="true">⋮⋮</span><input class="input" name="menu_label[]" placeholder="Label" aria-label="Menu label" maxlength="40"><input class="input" name="menu_url[]" placeholder="/reviews or https://…" aria-label="Menu link"><select class="input" name="menu_type[]" aria-label="Item type"><option value="link">Link</option><option value="categories">Categories dropdown</option></select><span class="menu-btns"><button type="button" class="icon-danger" data-move="-1" aria-label="Move up" title="Move up">↑</button><button type="button" class="icon-danger" data-move="1" aria-label="Move down" title="Move down">↓</button><button type="button" class="icon-danger" data-remove aria-label="Remove item" title="Remove"><?= aicon('trash') ?></button></span></div></template>
  </section>
 
 <?php elseif($view==='users'): ?>

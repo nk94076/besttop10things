@@ -9,14 +9,14 @@ function headerView(string $title='', string $description='', string $active='')
  $metaTitle=$title!==''?$title.' | '.setting('site_name'):(setting('seo_title')?:setting('site_name'));
  $metaDesc=$description?:setting('description');
  $og=setting('og_image'); ?>
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($metaTitle) ?></title><meta name="description" content="<?= e($metaDesc) ?>"><?php if(setting('meta_keywords')!==''): ?><meta name="keywords" content="<?= e(setting('meta_keywords')) ?>"><?php endif ?><?php if(setting('google_verification')!==''): ?><meta name="google-site-verification" content="<?= e(setting('google_verification')) ?>"><?php endif ?><meta property="og:type" content="website"><meta property="og:site_name" content="<?= e(setting('site_name')) ?>"><meta property="og:title" content="<?= e($metaTitle) ?>"><meta property="og:description" content="<?= e($metaDesc) ?>"><?php if($og!==''&&safeImage($og)): ?><meta property="og:image" content="<?= e(str_starts_with($og,'/')?'https://'.($_SERVER['HTTP_HOST']??'').$og:$og) ?>"><meta name="twitter:card" content="summary_large_image"><?php endif ?><link rel="icon" href="<?= e(setting('logo')!==''&&safeImage(setting('logo'))?setting('logo'):'/assets/favicon.svg') ?>"><link rel="stylesheet" href="/assets/site.css"><script src="/assets/app.js" defer></script></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($metaTitle) ?></title><meta name="description" content="<?= e($metaDesc) ?>"><?php if(setting('meta_keywords')!==''): ?><meta name="keywords" content="<?= e(setting('meta_keywords')) ?>"><?php endif ?><?php if(setting('google_verification')!==''): ?><meta name="google-site-verification" content="<?= e(setting('google_verification')) ?>"><?php endif ?><meta property="og:type" content="website"><meta property="og:site_name" content="<?= e(setting('site_name')) ?>"><meta property="og:title" content="<?= e($metaTitle) ?>"><meta property="og:description" content="<?= e($metaDesc) ?>"><?php if($og!==''&&safeImage($og)): ?><meta property="og:image" content="<?= e(str_starts_with($og,'/')?'https://'.($_SERVER['HTTP_HOST']??'').$og:$og) ?>"><meta name="twitter:card" content="summary_large_image"><?php endif ?><link rel="canonical" href="<?= e('https://'.($_SERVER['HTTP_HOST']??'').(rtrim((string)parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH),'/')?:'/')) ?>"><link rel="icon" href="<?= e(setting('logo')!==''&&safeImage(setting('logo'))?setting('logo'):'/assets/favicon.svg') ?>"><link rel="stylesheet" href="/assets/site.css"><script src="/assets/app.js" defer></script></head><body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-header"><div class="wrap header-row">
  <?= siteLogo() ?>
  <nav class="main-nav" aria-label="Main navigation">
-  <?php foreach(siteMenu() as $item): parse_str((string)parse_url($item['url'],PHP_URL_QUERY),$qs); $isActive=($qs['page']??'')!==''&&($qs['page']??'')===$active&&!str_contains($item['url'],'#'); ?>
+  <?php foreach(siteMenu() as $item): $isActive=$active!==''&&$active!=='home'&&parse_url($item['url'],PHP_URL_PATH)===pagePath($active)&&!str_contains($item['url'],'#'); ?>
    <?php if(($item['type']??'link')==='categories'): ?><div class="nav-drop"><a href="<?= e($item['url']) ?>" class="<?= $isActive?'active':'' ?>"><?= e($item['label']) ?> <?= ficon('down','ic ic-xs') ?></a>
-    <div class="drop-panel"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a href="/?page=reviews&category=<?= e($c['slug']) ?>"><span class="cat-dot tone-<?= $tone ?>"><?= ficon($ic,'ic ic-sm') ?></span><?= e($c['name']) ?></a><?php endforeach ?><a class="drop-all" href="<?= e($item['url']) ?>">View all <?= ficon('arrow','ic ic-sm') ?></a></div></div>
+    <div class="drop-panel"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a href="/category/<?= e($c['slug']) ?>"><span class="cat-dot tone-<?= $tone ?>"><?= ficon($ic,'ic ic-sm') ?></span><?= e($c['name']) ?></a><?php endforeach ?><a class="drop-all" href="<?= e($item['url']) ?>">View all <?= ficon('arrow','ic ic-sm') ?></a></div></div>
    <?php else: ?><a href="<?= e($item['url']) ?>" class="<?= $isActive?'active':'' ?>"<?= str_starts_with($item['url'],'https://')?' target="_blank" rel="noopener"':'' ?>><?= e($item['label']) ?></a><?php endif ?>
   <?php endforeach ?>
  </nav>
@@ -33,11 +33,11 @@ function headerView(string $title='', string $description='', string $active='')
  <div class="search-box">
   <button type="button" class="icon-btn search-close" data-search-close aria-label="Close search"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   <p class="eyebrow">Search</p>
-  <form class="search-big" action="/" role="search"><input type="hidden" name="page" value="reviews"><?= ficon('search') ?><input name="q" placeholder="What are you looking for?" aria-label="Search reviews" data-search-input autocomplete="off"><button class="btn btn-primary">Search <?= ficon('arrow','ic ic-sm') ?></button></form>
+  <form class="search-big" action="/reviews" role="search"><?= ficon('search') ?><input name="q" placeholder="What are you looking for?" aria-label="Search reviews" data-search-input autocomplete="off"><button class="btn btn-primary">Search <?= ficon('arrow','ic ic-sm') ?></button></form>
   <p class="search-label">Popular searches</p>
-  <div class="popular"><a href="/?page=reviews&q=headphones">Headphones</a><a href="/?page=reviews&q=laptop">Laptops</a><a href="/?page=reviews&q=travel">Travel</a><a href="/?page=reviews&q=shopping">Online shopping</a><a href="/?page=top10">Top 10 lists</a></div>
+  <div class="popular"><a href="/reviews?q=headphones">Headphones</a><a href="/reviews?q=laptop">Laptops</a><a href="/reviews?q=travel">Travel</a><a href="/reviews?q=shopping">Online shopping</a><a href="/top-10">Top 10 lists</a></div>
   <p class="search-label">Browse categories</p>
-  <div class="search-cats"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a href="/?page=reviews&category=<?= e($c['slug']) ?>"><span class="cat-dot tone-<?= $tone ?>"><?= ficon($ic,'ic ic-sm') ?></span><?= e($c['name']) ?></a><?php endforeach ?></div>
+  <div class="search-cats"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a href="/category/<?= e($c['slug']) ?>"><span class="cat-dot tone-<?= $tone ?>"><?= ficon($ic,'ic ic-sm') ?></span><?= e($c['name']) ?></a><?php endforeach ?></div>
  </div>
 </div>
 <?php }
@@ -51,7 +51,7 @@ function footerView(): void { ?>
 </div></section>
 <footer class="site-footer"><div class="wrap footer-row">
  <div><?= siteLogo('logo logo-sm') ?><p class="footer-tag">A little more clarity. A better everyday choice.<br>Reviews and guides for the way you live.</p></div>
- <nav class="footer-links" aria-label="Footer"><a href="/?page=categories">Explore categories</a><a href="/?page=about#how">How we review</a><a href="/?page=about">About</a><a href="/?page=privacy">Privacy</a><a href="/admin.php">Editorial CMS</a></nav>
+ <nav class="footer-links" aria-label="Footer"><a href="/categories">Explore categories</a><a href="/about#how">How we review</a><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/admin.php">Editorial CMS</a></nav>
 </div><div class="wrap footer-bottom"><span>© <?= date('Y') ?> <?= e(setting('site_name')) ?>. All rights reserved.</span><span>Some links are affiliate links. Scores are illustrative.</span></div></footer>
 </body></html>
 <?php }

@@ -1,0 +1,7 @@
+.besttop10-private/storage/
+www.besttop10things.com/uploads/
+www.besttop10things.com/.ssh
+.env
+*.log
+*.sqlite
+*.zip

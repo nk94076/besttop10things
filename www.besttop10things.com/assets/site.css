@@ -441,3 +441,15 @@ body.no-scroll{overflow:hidden}
  .feat-list a{grid-template-columns:34px 1fr 84px;gap:12px}.feat-list img{width:84px;height:60px}.feat-num{font-size:20px}
  .row-item img{width:96px;height:72px}.row-item small{display:none}.feat-body h3{font-size:21px}.spot-overlay h3{font-size:20px}
 }
+
+/* ---------- Mobile: category strip becomes a grid ---------- */
+@media (max-width:680px){
+ .cat-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:8px;overflow:visible}
+ .cat-strip a{flex:none;gap:6px;padding:10px 2px;font-size:11.5px;line-height:1.25;border-radius:12px}
+ .cat-strip .cat-dot{width:36px;height:36px}
+ .cat-strip .cat-dot .ic{width:18px;height:18px}
+ .cat-strip a:first-child{background:none}
+ .interest b{font-size:13.5px}
+ .interest small{font-size:12px}
+}
+@media (max-width:360px){.cat-strip{grid-template-columns:repeat(3,minmax(0,1fr))}}

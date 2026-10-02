@@ -3,7 +3,7 @@ require __DIR__.'/../.besttop10-private/app/bootstrap.php';
 header('Cache-Control: no-store');
 header('X-Robots-Tag: noindex, nofollow');
 const UPLOAD_DIR = __DIR__.'/uploads';
-const PER_PAGE = 20;
+const PER_PAGE = 10;
 $error='';$view=(string)($_GET['view']??'dashboard');
 $logged=isset($_SESSION['admin']);
 if($logged && time()-($_SESSION['active']??0)>3600){unset($_SESSION['admin']);$logged=false;}
@@ -33,6 +33,10 @@ function libraryImages(): array {
  $images=array_column(mediaFiles(),'url');
  foreach(glob(__DIR__.'/assets/{,articles/}*.{jpg,svg}',GLOB_BRACE)?:[] as $p) if(basename($p)!=='favicon.svg') $images[]=substr($p,strlen(__DIR__));
  return $images;
+}
+function aicon(string $name, string $class='icon'): string {
+ static $p=['home'=>'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" fill="currentColor" stroke="none"/>','file'=>'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>','image'=>'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>','folder'=>'<path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>','users'=>'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>','gear'=>'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>','chart'=>'<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>','pen'=>'<path d="M4 20h16M14.5 4.5l3 3L8 17H5v-3z"/>','clock'=>'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>','trash'=>'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>','send'=>'<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>','calendar'=>'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>','right'=>'<path d="m9 6 6 6-6 6"/>','down'=>'<path d="m6 9 6 6 6-6"/>','plus'=>'<path d="M12 5v14M5 12h14"/>','search'=>'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>','sun'=>'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>','user'=>'<circle cx="12" cy="8" r="4" fill="currentColor" stroke="none"/><path d="M4 21a8 8 0 0 1 16 0z" fill="currentColor" stroke="none"/>','logout'=>'<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11"/>','menu'=>'<path d="M3 6h18M3 12h18M3 18h18"/>','crown'=>'<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" fill="currentColor" stroke="none"/>'];
+ return '<svg class="'.e($class).'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'.($p[$name]??$p['file']).'</svg>';
 }
 function imageInUse(string $url): bool { return (bool)query('SELECT id FROM reviews WHERE image=? OR instr(body,?)>0 LIMIT 1',[$url,$url]); }
 function savePost(array $in, int $id): int {
@@ -170,16 +174,17 @@ if(!isset($titles[$view]))$view='dashboard';
 ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($logged?$titles[$view]:'Log in') ?> ‹ <?= e(setting('site_name')) ?></title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/admin.css"><script src="/assets/admin.js" defer></script></head>
 <body class="<?= $logged?'cms':'cms-login' ?>">
 <?php if(!$logged): ?>
+<aside class="login-art"><div><a class="login-logo" href="/"><img src="/assets/favicon.svg" alt=""><span><?= e(setting('site_name')) ?></span></a><p class="login-quote">Good choices start with great content.</p><p class="login-sub">Write, schedule and publish your reviews and guides from one calm workspace.</p></div><p class="login-foot">© <?= date('Y') ?> <?= e(setting('site_name')) ?></p></aside>
 <main class="login-box">
- <a class="login-logo" href="/"><img src="/assets/favicon.svg" alt=""><span><?= e(setting('site_name')) ?></span></a>
+ <h1 class="login-title">Welcome back</h1><p class="login-lead">Sign in to your editorial workspace.</p>
  <?php if($error): ?><p role="alert" class="notice notice-error"><?= e($error) ?></p><?php endif ?>
  <?php if(!query('SELECT id FROM admins LIMIT 1')): ?>
   <div class="box"><p>The CMS account has not been configured. Run <code>php scripts/create-admin.php</code> on the server to create your private account.</p></div>
  <?php else: ?>
-  <form method="post" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="login">
+  <form method="post" class="stack"><?= csrfField() ?><input type="hidden" name="action" value="login">
    <label>Email<input class="input" name="email" type="email" autocomplete="username" required></label>
    <label>Password<input class="input" name="password" type="password" autocomplete="current-password" required></label>
-   <button class="button button-primary button-block">Log In</button>
+   <button class="button button-primary button-block button-lg">Sign in</button>
   </form>
  <?php endif ?>
  <p class="login-back"><a href="/">← Go to <?= e(setting('site_name')) ?></a></p>
@@ -188,97 +193,106 @@ if(!isset($titles[$view]))$view='dashboard';
  $now=now();
  $count=fn(string $where)=>(int)db()->query("SELECT COUNT(*) FROM reviews r WHERE $where")->fetchColumn();
  $counts=['all'=>$count("r.status!='trash'"),'published'=>$count(live()),'scheduled'=>$count("r.status='published' AND r.published_at>'$now'"),'draft'=>$count("r.status='draft'"),'trash'=>$count("r.status='trash'")];
- $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','book'],'media'=>['Media','grid'],'categories'=>['Categories','shopping'],'users'=>['Users','check'],'settings'=>['Settings','gadgets']];
+ $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
 ?>
-<header class="cms-bar">
- <button type="button" class="cms-menu" data-side-toggle aria-label="Toggle menu"><?= icon('menu') ?></button>
- <a class="cms-site" href="/" target="_blank"><?= icon('home','icon') ?> <?= e(setting('site_name')) ?></a>
- <a class="cms-new" href="/admin.php?view=edit">+ New</a>
+<header class="cms-top">
+ <button type="button" class="cms-menu" data-side-toggle aria-label="Toggle menu"><?= aicon('menu') ?></button>
+ <a class="top-brand" href="/admin.php"><span class="brand-mark"><?= aicon('crown') ?></span><span><?= e(setting('site_name')) ?></span></a>
+ <details class="new-menu"><summary class="button button-primary"><?= aicon('plus') ?> New <?= aicon('down','icon-sm') ?></summary>
+  <div class="dropdown"><a href="/admin.php?view=edit"><?= aicon('file') ?> Post</a><a href="/admin.php?view=media"><?= aicon('image') ?> Media</a><a href="/admin.php?view=categories"><?= aicon('folder') ?> Category</a><a href="/admin.php?view=users"><?= aicon('users') ?> User</a></div></details>
+ <form class="top-search" method="get" role="search"><input type="hidden" name="view" value="posts"><?= aicon('search') ?><input name="s" placeholder="Search posts, pages, media..." aria-label="Search posts" value="<?= e($view==='posts'?($_GET['s']??''):'') ?>"></form>
  <span class="cms-spacer"></span>
+ <button type="button" class="icon-btn" data-theme-toggle aria-label="Toggle dark mode" title="Toggle dark mode"><?= aicon('sun') ?></button>
+ <span class="top-divider"></span>
  <span class="cms-user">Howdy, <?= e($me['email']) ?></span>
- <form method="post"><?= csrfField() ?><input type="hidden" name="action" value="logout"><button class="cms-logout">Log Out</button></form>
+ <a class="avatar-link" href="/admin.php?view=users" title="Your account"><span class="avatar"><?= aicon('user') ?></span><?= aicon('down','icon-sm') ?></a>
+ <span class="top-divider"></span>
+ <form method="post"><?= csrfField() ?><input type="hidden" name="action" value="logout"><button class="logout-btn"><?= aicon('logout') ?><span>Log Out</span></button></form>
 </header>
 <aside class="cms-side" id="cms-side"><nav aria-label="CMS navigation">
  <?php foreach($nav as $key=>[$label,$ic]): $active=$view===$key||($key==='posts'&&$view==='edit'); ?>
-  <a class="<?= $active?'active':'' ?>" href="/admin.php?view=<?= $key ?>"><?= icon($ic,'icon') ?><span><?= $label ?></span><?php if($key==='posts'&&$counts['draft']): ?><b class="badge"><?= $counts['draft'] ?></b><?php endif ?></a>
+  <a class="<?= $active?'active':'' ?>" href="/admin.php?view=<?= $key ?>"><?= aicon($ic) ?><span><?= $label ?></span><?php if($key==='posts'&&$counts['draft']): ?><b class="badge"><?= $counts['draft'] ?></b><?php endif ?></a>
   <?php if($key==='posts'&&$active): ?><div class="sub"><a class="<?= $view==='posts'?'active':'' ?>" href="/admin.php?view=posts">All Posts</a><a class="<?= $view==='edit'&&empty($_GET['id'])?'active':'' ?>" href="/admin.php?view=edit">Add New</a></div><?php endif ?>
  <?php endforeach ?>
 </nav></aside>
+<div class="cms-scrim" data-side-toggle></div>
 <main class="cms-main" id="main">
 <?php if($error): ?><p role="alert" class="notice notice-error"><?= e($error) ?></p><?php endif ?>
 <?php if(isset($_SESSION['flash'])): ?><p role="status" class="notice notice-success"><?= e($_SESSION['flash']) ?></p><?php unset($_SESSION['flash']);endif ?>
 
 <?php if($view==='dashboard'): ?>
- <h1 class="page-title">Dashboard</h1>
+ <div class="page-head"><div><h1 class="page-title">Dashboard</h1><p class="page-sub">Welcome back! Here's what's happening with your site.</p></div><span class="date-chip"><?= aicon('calendar') ?> <?= e(date('M j, Y')) ?></span></div>
  <div class="dash">
-  <section class="box"><h2 class="box-title">At a Glance</h2><ul class="glance">
-   <li><a href="/admin.php?view=posts&status=published"><b><?= $counts['published'] ?></b> Published</a></li>
-   <li><a href="/admin.php?view=posts&status=draft"><b><?= $counts['draft'] ?></b> Drafts</a></li>
-   <li><a href="/admin.php?view=posts&status=scheduled"><b><?= $counts['scheduled'] ?></b> Scheduled</a></li>
-   <li><a href="/admin.php?view=categories"><b><?= (int)db()->query('SELECT COUNT(*) FROM categories')->fetchColumn() ?></b> Categories</a></li>
-   <li><a href="/admin.php?view=media"><b><?= count(mediaFiles()) ?></b> Media files</a></li>
-   <li><a href="/admin.php?view=posts&status=trash"><b><?= $counts['trash'] ?></b> In Trash</a></li>
-  </ul></section>
-  <section class="box"><h2 class="box-title">Quick Draft</h2><form method="post" class="stack"><?= csrfField() ?><input type="hidden" name="action" value="quick_draft">
+  <section class="box dash-glance"><h2 class="box-title"><?= aicon('chart','icon title-icon') ?> At a Glance</h2><div class="glance">
+   <?php foreach([['Published',$counts['published'],'posts&status=published','file','teal'],['Drafts',$counts['draft'],'posts&status=draft','file','blue'],['Scheduled',$counts['scheduled'],'posts&status=scheduled','clock','violet'],['Categories',(int)db()->query('SELECT COUNT(*) FROM categories')->fetchColumn(),'categories','folder','amber'],['Media files',count(mediaFiles()),'media','image','rose'],['In Trash',$counts['trash'],'posts&status=trash','trash','green']] as [$label,$n,$link,$ic,$tone]): ?>
+    <a class="tile tile-<?= $tone ?>" href="/admin.php?view=<?= $link ?>"><span class="tile-icon"><?= aicon($ic) ?></span><span><b class="tile-num"><?= $n ?></b><span class="tile-label"><?= $label ?></span></span></a>
+   <?php endforeach ?></div></section>
+  <section class="box dash-draft"><h2 class="box-title box-title-line"><?= aicon('pen','icon title-icon') ?> Quick Draft</h2><form method="post" class="stack"><?= csrfField() ?><input type="hidden" name="action" value="quick_draft">
    <label>Title<input class="input" name="title" required maxlength="200"></label>
    <label>Content<textarea class="input" name="body" rows="4" placeholder="What's on your mind?" required></textarea></label>
-   <div><button class="button">Save Draft</button></div></form></section>
-  <section class="box"><h2 class="box-title">Recently Published</h2><ul class="activity">
+   <div><button class="button button-primary"><?= aicon('send') ?> Save Draft</button></div></form></section>
+  <section class="box dash-recent"><h2 class="box-title box-title-line"><?= aicon('file','icon title-icon') ?> Recently Published <a class="chev" href="/admin.php?view=posts&status=published" aria-label="All published posts"><?= aicon('right') ?></a></h2><ul class="activity">
    <?php foreach(query('SELECT r.id,r.title,r.published_at FROM reviews r WHERE '.live().' ORDER BY r.published_at DESC,r.id DESC LIMIT 6') as $r): ?>
     <li><span class="muted"><?= e(date('M j, g:i a',strtotime($r['published_at']))) ?></span><a href="/admin.php?view=edit&id=<?= $r['id'] ?>"><?= e($r['title']) ?></a></li>
    <?php endforeach ?></ul></section>
-  <section class="box"><h2 class="box-title">Your Drafts</h2><ul class="activity">
+  <section class="box dash-drafts"><h2 class="box-title"><?= aicon('file','icon title-icon') ?> Your Drafts <a class="chev" href="/admin.php?view=posts&status=draft" aria-label="All drafts"><?= aicon('right') ?></a></h2><ul class="activity">
    <?php foreach($drafts=query("SELECT id,title,updated_at FROM reviews WHERE status='draft' ORDER BY updated_at DESC LIMIT 6") as $r): ?>
     <li><span class="muted"><?= e(date('M j',strtotime($r['updated_at']))) ?></span><a href="/admin.php?view=edit&id=<?= $r['id'] ?>"><?= e($r['title']) ?></a></li>
    <?php endforeach ?><?php if(!$drafts): ?><li class="muted">No drafts.</li><?php endif ?></ul></section>
  </div>
-
 <?php elseif($view==='posts'):
  $status=(string)($_GET['status']??'all');if(!isset($counts[$status]))$status='all';
  $s=trim((string)($_GET['s']??''));$cat=(int)($_GET['cat']??0);$page=max(1,(int)($_GET['p']??1));
- $orderby=['date'=>'r.published_at','title'=>'r.title','score'=>'r.score','modified'=>'r.updated_at'][(string)($_GET['orderby']??'')]??'r.published_at';
+ $orderby=['date'=>'r.published_at','title'=>'r.title COLLATE NOCASE','score'=>'r.score','modified'=>'r.updated_at','category'=>'c.name'][(string)($_GET['orderby']??'')]??'r.published_at';
  $dir=($_GET['order']??'')==='asc'?'ASC':'DESC';
  $where=['all'=>"r.status!='trash'",'published'=>live(),'scheduled'=>"r.status='published' AND r.published_at>'$now'",'draft'=>"r.status='draft'",'trash'=>"r.status='trash'"][$status];$params=[];
  if($s!==''){$where.=' AND (r.title LIKE ? OR r.body LIKE ?)';$params[]="%$s%";$params[]="%$s%";}
  if($cat){$where.=' AND r.category_id=?';$params[]=$cat;}
- $total=(int)(query("SELECT COUNT(*) AS n FROM reviews r WHERE $where",$params)[0]['n']);$pages=max(1,(int)ceil($total/PER_PAGE));$page=min($page,$pages);
+ $total=(int)(query("SELECT COUNT(*) AS n FROM reviews r JOIN categories c ON c.id=r.category_id WHERE $where",$params)[0]['n']);$pages=max(1,(int)ceil($total/PER_PAGE));$page=min($page,$pages);
  $rows=query("SELECT r.*,c.name AS category FROM reviews r JOIN categories c ON c.id=r.category_id WHERE $where ORDER BY $orderby $dir,r.id DESC LIMIT ".PER_PAGE.' OFFSET '.(($page-1)*PER_PAGE),$params);
  $q=fn(array $over)=>'/admin.php?'.http_build_query(array_filter(['view'=>'posts','status'=>$status==='all'?null:$status,'s'=>$s?:null,'cat'=>$cat?:null,'orderby'=>$_GET['orderby']??null,'order'=>$_GET['order']??null]+$over+[],fn($v)=>$v!==null&&$v!==''));
  $self=$q(['p'=>$page>1?$page:null]);
- $sortLink=function(string $key,string $label)use($q,$dir){$cur=($_GET['orderby']??'date')===$key;$next=$cur&&$dir==='DESC'?'asc':'desc';return '<a href="'.e($q(['orderby'=>$key,'order'=>$next,'p'=>null])).'">'.$label.($cur?($dir==='ASC'?' ▲':' ▼'):'').'</a>';};
+ $sortLink=function(string $key,string $label)use($q,$dir){$cur=($_GET['orderby']??'date')===$key;$next=$cur&&$dir==='DESC'?'asc':'desc';return '<a class="sort'.($cur?' sorted':'').'" href="'.e($q(['orderby'=>$key,'order'=>$next,'p'=>null])).'">'.$label.'<svg class="sort-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="up'.($cur&&$dir==='ASC'?' on':'').'" d="m8 10 4-4 4 4"/><path class="down'.($cur&&$dir==='DESC'?' on':'').'" d="m8 14 4 4 4-4"/></svg></a>';};
+ $chip=fn(int $id)=>['teal','violet','green','rose','amber','blue'][$id%6];
 ?>
- <div class="page-head"><h1 class="page-title">Posts</h1><a class="button" href="/admin.php?view=edit">Add New Post</a></div>
- <ul class="subsubsub"><?php foreach(['all'=>'All','published'=>'Published','scheduled'=>'Scheduled','draft'=>'Drafts','trash'=>'Trash'] as $k=>$label): if($k!=='all'&&!$counts[$k])continue; ?><li><a class="<?= $status===$k?'current':'' ?>" href="<?= e($q(['status'=>$k==='all'?null:$k,'p'=>null])) ?>"><?= $label ?> <span class="muted">(<?= $counts[$k] ?>)</span></a></li><?php endforeach ?></ul>
+ <section class="panel">
+ <div class="page-head panel-head"><div class="head-with-icon"><span class="head-icon"><?= aicon('file') ?></span><div><h1 class="page-title">Posts</h1><p class="page-sub">Manage and organize your content. Create, edit, and publish posts.</p></div></div><a class="button button-primary button-lg" href="/admin.php?view=edit"><?= aicon('plus') ?> Add New Post</a></div>
+ <ul class="seg"><?php foreach(['all'=>'All','published'=>'Published','scheduled'=>'Scheduled','draft'=>'Drafts','trash'=>'Trash'] as $k=>$label): if($k!=='all'&&!$counts[$k])continue; ?><li><a class="<?= $status===$k?'current':'' ?>" href="<?= e($q(['status'=>$k==='all'?null:$k,'p'=>null])) ?>"><?php if($k!=='all'): ?><i class="dot dot-<?= $k ?>"></i><?php endif ?><?= $label ?> (<?= $counts[$k] ?>)</a></li><?php endforeach ?></ul>
  <form class="tablenav" method="get"><input type="hidden" name="view" value="posts"><?php if($status!=='all'): ?><input type="hidden" name="status" value="<?= e($status) ?>"><?php endif ?>
-  <select class="input input-sm" name="cat" aria-label="Filter by category"><option value="">All Categories</option><?php foreach(categories() as $c): ?><option value="<?= $c['id'] ?>" <?= $cat===(int)$c['id']?'selected':'' ?>><?= e($c['name']) ?></option><?php endforeach ?></select>
-  <button class="button button-sm">Filter</button><span class="cms-spacer"></span>
-  <input class="input input-sm" type="search" name="s" value="<?= e($s) ?>" aria-label="Search posts" placeholder="Search posts"><button class="button button-sm">Search Posts</button>
+  <label class="field-icon"><?= aicon('folder') ?><select class="input" name="cat" aria-label="Filter by category"><option value="">All Categories</option><?php foreach(categories() as $c): ?><option value="<?= $c['id'] ?>" <?= $cat===(int)$c['id']?'selected':'' ?>><?= e($c['name']) ?></option><?php endforeach ?></select></label>
+  <button class="button button-outline"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg> Filter</button><span class="cms-spacer"></span>
+  <label class="field-icon field-search"><?= aicon('search') ?><input class="input" type="search" name="s" value="<?= e($s) ?>" aria-label="Search posts" placeholder="Search posts..."></label><button class="button button-primary">Search Posts</button>
  </form>
  <form method="post" id="bulk-form"><?= csrfField() ?><input type="hidden" name="action" value="bulk"><input type="hidden" name="return" value="<?= e($self) ?>">
  <div class="tablenav">
-  <select class="input input-sm" name="bulk_action" aria-label="Bulk actions"><option value="">Bulk actions</option>
+  <select class="input select-bulk" name="bulk_action" aria-label="Bulk actions"><option value="">Bulk actions</option>
    <?php if($status==='trash'): ?><option value="restore">Restore</option><option value="delete">Delete permanently</option><?php else: ?><option value="publish">Publish</option><option value="draft">Move to Draft</option><option value="trash">Move to Trash</option><?php endif ?>
-  </select><button class="button button-sm" data-bulk-apply>Apply</button><span class="cms-spacer"></span><span class="muted"><?= $total ?> item<?= $total===1?'':'s' ?></span>
+  </select><button class="button button-outline" data-bulk-apply>Apply</button><span class="cms-spacer"></span><span class="muted"><?= $total ?> item<?= $total===1?'':'s' ?></span>
  </div>
- <div class="table-wrap"><table class="list-table"><thead><tr><th class="check"><input type="checkbox" data-check-all aria-label="Select all"></th><th><?= $sortLink('title','Title') ?></th><th>Category</th><th><?= $sortLink('score','Score') ?></th><th><?= $sortLink('date','Date') ?></th></tr></thead><tbody>
- <?php foreach($rows as $r): $state=postState($r); ?>
+ <div class="table-wrap"><table class="list-table"><thead><tr><th class="check"><input type="checkbox" data-check-all aria-label="Select all"></th><th class="th-title"><?= $sortLink('title','Title') ?></th><th><?= $sortLink('category','Category') ?></th><th><?= $sortLink('score','Score') ?></th><th><?= $sortLink('date','Date') ?></th><th class="kebab-col"><span class="sr-only">Actions</span></th></tr></thead><tbody>
+ <?php foreach($rows as $r): $state=postState($r); $view_url=reviewUrl($r).($state==='published'?'':'&preview=1'); ?>
   <tr><td class="check"><input type="checkbox" name="ids[]" value="<?= $r['id'] ?>" aria-label="Select <?= e($r['title']) ?>"></td>
-   <td class="title-col"><a class="row-title" href="/admin.php?view=edit&id=<?= $r['id'] ?>"><?= e($r['title']) ?></a><?php if($state!=='published'&&$status==='all'): ?> <span class="state">— <?= ucfirst($state) ?></span><?php endif ?><?php if($r['featured']): ?> <span class="tag">Featured</span><?php endif ?><?php if($r['demo']): ?> <span class="tag">Sample</span><?php endif ?>
-    <div class="row-actions">
-     <?php if($state==='trash'): ?>
-      <button form="row-<?= $r['id'] ?>-restore">Restore</button> | <button class="danger" form="row-<?= $r['id'] ?>-delete">Delete Permanently</button>
-     <?php else: ?>
-      <a href="/admin.php?view=edit&id=<?= $r['id'] ?>">Edit</a> | <button form="row-<?= $r['id'] ?>-dup">Duplicate</button> | <button class="danger" form="row-<?= $r['id'] ?>-trash">Trash</button> | <a href="<?= e(reviewUrl($r)) ?><?= $state==='published'?'':'&preview=1' ?>" target="_blank"><?= $state==='published'?'View':'Preview' ?></a>
-     <?php endif ?>
-    </div></td>
-   <td><a href="<?= e($q(['cat'=>$r['category_id'],'p'=>null])) ?>"><?= e($r['category']) ?></a></td>
-   <td><?= $r['score']>0?number_format((float)$r['score'],1):'—' ?></td>
-   <td class="date-col"><?= ['published'=>'Published','scheduled'=>'Scheduled','draft'=>'Last Modified','trash'=>'Trashed'][$state] ?><br><span class="muted"><?= e(date('Y/m/d \a\t g:i a',strtotime($state==='draft'||$state==='trash'?$r['updated_at']:$r['published_at']))) ?></span></td></tr>
+   <td class="title-col"><div class="title-cell"><img class="thumb" src="<?= e($r['image']) ?>" alt="" loading="lazy"><div><a class="row-title" href="/admin.php?view=edit&id=<?= $r['id'] ?>"><?= e($r['title']) ?></a><?php if($state!=='published'): ?> <span class="pill pill-<?= $state ?>"><?= ucfirst($state) ?></span><?php endif ?><?php if($r['featured']): ?> <span class="tag">Featured</span><?php endif ?><?php if($r['demo']): ?> <span class="tag">Sample</span><?php endif ?></div></div></td>
+   <td><a class="chip chip-<?= $chip((int)$r['category_id']) ?>" href="<?= e($q(['cat'=>$r['category_id'],'p'=>null])) ?>"><?= e($r['category']) ?></a></td>
+   <td class="score-col"><?= $r['score']>0?number_format((float)$r['score'],1):'—' ?></td>
+   <td class="date-col"><span class="date-state"><?= ['published'=>'Published','scheduled'=>'Goes live','draft'=>'Last modified','trash'=>'Trashed'][$state] ?></span><br><?= e(date('Y/m/d \a\t g:i a',strtotime($state==='draft'||$state==='trash'?$r['updated_at']:$r['published_at']))) ?></td>
+   <td class="kebab-col"><details class="kebab"><summary aria-label="Actions for <?= e($r['title']) ?>"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="19" r="1.8" fill="currentColor"/></svg></summary><div class="dropdown dropdown-right">
+    <?php if($state==='trash'): ?>
+     <button form="row-<?= $r['id'] ?>-restore"><?= aicon('clock') ?> Restore</button><button class="danger" form="row-<?= $r['id'] ?>-delete"><?= aicon('trash') ?> Delete Permanently</button>
+    <?php else: ?>
+     <a href="/admin.php?view=edit&id=<?= $r['id'] ?>"><?= aicon('pen') ?> Edit</a><a href="<?= e($view_url) ?>" target="_blank"><?= aicon('right') ?> <?= $state==='published'?'View':'Preview' ?></a><button form="row-<?= $r['id'] ?>-dup"><?= aicon('file') ?> Duplicate</button><button class="danger" form="row-<?= $r['id'] ?>-trash"><?= aicon('trash') ?> Move to Trash</button>
+    <?php endif ?></div></details></td></tr>
  <?php endforeach ?>
- <?php if(!$rows): ?><tr><td colspan="5" class="muted empty">No posts found.</td></tr><?php endif ?>
+ <?php if(!$rows): ?><tr><td colspan="6" class="muted empty">No posts found.</td></tr><?php endif ?>
  </tbody></table></div></form>
  <?php foreach($rows as $r): foreach(['restore'=>'post_status','delete'=>'post_status','trash'=>'post_status','dup'=>'duplicate'] as $k=>$act): ?><form id="row-<?= $r['id'] ?>-<?= $k ?>" method="post" class="hidden" <?= $k==='delete'?'data-confirm="Delete this post permanently? This cannot be undone."':'' ?>><?= csrfField() ?><input type="hidden" name="action" value="<?= $act ?>"><input type="hidden" name="do" value="<?= $k ?>"><input type="hidden" name="id" value="<?= $r['id'] ?>"><input type="hidden" name="return" value="<?= e($self) ?>"></form><?php endforeach;endforeach ?>
- <?php if($pages>1): ?><nav class="pagination" aria-label="Pages"><?php for($i=1;$i<=$pages;$i++): ?><a class="<?= $i===$page?'current':'' ?>" href="<?= e($q(['p'=>$i])) ?>"><?= $i ?></a><?php endfor ?></nav><?php endif ?>
+ <div class="table-foot"><span class="muted"><?= $total?'Showing '.(($page-1)*PER_PAGE+1).' to '.min($total,$page*PER_PAGE).' of '.$total.' items':'' ?></span>
+ <?php if($pages>1): $from=max(1,min($page-2,$pages-4));$to=min($pages,$from+4); ?><nav class="pagination" aria-label="Pages">
+  <a class="<?= $page===1?'disabled':'' ?>" href="<?= e($q(['p'=>null])) ?>" aria-label="First page">«</a><a class="<?= $page===1?'disabled':'' ?>" href="<?= e($q(['p'=>max(1,$page-1)])) ?>" aria-label="Previous page">‹</a>
+  <?php for($i=$from;$i<=$to;$i++): ?><a class="<?= $i===$page?'current':'' ?>" href="<?= e($q(['p'=>$i])) ?>" <?= $i===$page?'aria-current="page"':'' ?>><?= $i ?></a><?php endfor ?>
+  <a class="<?= $page===$pages?'disabled':'' ?>" href="<?= e($q(['p'=>min($pages,$page+1)])) ?>" aria-label="Next page">›</a><a class="<?= $page===$pages?'disabled':'' ?>" href="<?= e($q(['p'=>$pages])) ?>" aria-label="Last page">»</a>
+ </nav><?php endif ?></div>
+ </section>
 
 <?php elseif($view==='edit'):
  $id=(int)($_GET['id']??0);
@@ -286,7 +300,7 @@ if(!isset($titles[$view]))$view='dashboard';
  if($r&&$error&&($_POST['action']??'')==='save_post')$r=array_merge($r,array_intersect_key($_POST,$r),['featured'=>isset($_POST['featured']),'demo'=>isset($_POST['demo'])]);
  if(!$r): ?><p class="notice notice-error">Post not found.</p><?php else: $state=$id?postState($r):'new'; ?>
  <div class="page-head"><h1 class="page-title"><?= $id?'Edit Post':'Add New Post' ?></h1><?php if($id): ?><a class="button" href="/admin.php?view=edit">Add New</a><?php endif ?></div>
- <form method="post" enctype="multipart/form-data" class="editor" data-editor><?= csrfField() ?><input type="hidden" name="action" value="save_post"><input type="hidden" name="id" value="<?= e($r['id']) ?>">
+ <form method="post" enctype="multipart/form-data" class="editor" data-editor data-now="<?= e(substr(now(),0,16)) ?>"><?= csrfField() ?><input type="hidden" name="action" value="save_post"><input type="hidden" name="id" value="<?= e($r['id']) ?>">
   <div class="editor-main">
    <input class="input title-input" name="title" value="<?= e($r['title']) ?>" placeholder="Add title" required maxlength="200" aria-label="Title" data-title>
    <p class="permalink">Permalink: <span class="muted"><?= e($_SERVER['HTTP_HOST']??'') ?>/?page=review&amp;slug=</span><input class="input input-sm" name="slug" value="<?= e($r['slug']) ?>" placeholder="auto-generated-from-title" aria-label="URL slug" data-slug>
@@ -338,7 +352,7 @@ if(!isset($titles[$view]))$view='dashboard';
  <?php endif ?>
 
 <?php elseif($view==='media'): $files=mediaFiles(); ?>
- <div class="page-head"><h1 class="page-title">Media Library</h1></div>
+ <div class="page-head"><div><h1 class="page-title">Media Library</h1><p class="page-sub">Upload and manage the images used across your site.</p></div></div>
  <form method="post" enctype="multipart/form-data" class="box upload-box"><?= csrfField() ?><input type="hidden" name="action" value="upload_media">
   <p><b>Upload images</b> <span class="muted">JPG, PNG or WebP, up to 5 MB each.</span></p><input class="input" type="file" name="files[]" accept="image/jpeg,image/png,image/webp" multiple required><button class="button button-primary">Upload</button></form>
  <div class="media-grid">
@@ -352,7 +366,7 @@ if(!isset($titles[$view]))$view='dashboard';
  <p class="hint">Click an image URL to copy it, then paste it into a post as <code>![description](/uploads/…)</code>.</p>
 
 <?php elseif($view==='categories'): ?>
- <h1 class="page-title">Categories</h1>
+ <div class="page-head"><div><h1 class="page-title">Categories</h1><p class="page-sub">Organise posts into topics readers can browse.</p></div></div>
  <div class="two-col">
   <form method="post" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="save_category"><h2 class="box-title">Add New Category</h2>
    <label>Name<input class="input" name="name" required maxlength="60" placeholder="e.g. Automotive"></label>
@@ -368,7 +382,7 @@ if(!isset($titles[$view]))$view='dashboard';
  </div>
 
 <?php elseif($view==='users'): ?>
- <h1 class="page-title">Users</h1>
+ <div class="page-head"><div><h1 class="page-title">Users</h1><p class="page-sub">People who can sign in to this workspace.</p></div></div>
  <div class="two-col">
   <div class="stack">
    <form method="post" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="add_user"><h2 class="box-title">Add New User</h2>
@@ -387,7 +401,7 @@ if(!isset($titles[$view]))$view='dashboard';
  </div>
 
 <?php elseif($view==='settings'): ?>
- <h1 class="page-title">Settings</h1>
+ <div class="page-head"><div><h1 class="page-title">Settings</h1><p class="page-sub">Your site title, homepage headline and description.</p></div></div>
  <form method="post" class="box stack narrow"><?= csrfField() ?><input type="hidden" name="action" value="settings">
   <?php foreach(['site_name'=>'Site Title','tagline'=>'Homepage headline','description'=>'Homepage description (also the default meta description)'] as $key=>$label): ?><label><?= $label ?><textarea class="input" name="<?= $key ?>" rows="2" required maxlength="500"><?= e(setting($key)) ?></textarea></label><?php endforeach ?>
   <div><button class="button button-primary">Save Changes</button></div></form>

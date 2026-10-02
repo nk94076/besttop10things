@@ -1,9 +1,37 @@
 <?php
+// Let PHP's built-in dev server serve real files (assets, uploads) directly.
+if(PHP_SAPI==='cli-server'&&is_file(__DIR__.parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH)))return false;
 require __DIR__.'/../.besttop10-private/app/bootstrap.php';
 require ROOT.'/app/layout.php';
-$page=(string)($_GET['page']??'home');
-$requestPath=parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH);
-if(!in_array($requestPath,['/','/index.php'],true)){http_response_code(404);$page='404';}
+
+// Routing: clean URLs, with 301 redirects from the old "/?page=…" links.
+$path=rtrim(rawurldecode((string)parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH)),'/')?:'/';
+$routes=['/'=>'home','/index.php'=>'home','/reviews'=>'reviews','/top-10'=>'top10','/categories'=>'categories','/compare'=>'compare','/about'=>'about','/privacy'=>'privacy','/sitemap.xml'=>'sitemap','/robots.txt'=>'robots'];
+if(($routes[$path]??'')==='home'&&isset($_GET['page'])&&$_SERVER['REQUEST_METHOD']==='GET'){
+ $target=cleanUrl('/?'.(string)($_SERVER['QUERY_STRING']??''));
+ if(!str_starts_with($target,'/?')){header('Location: '.$target,true,301);exit;}
+}
+if(isset($routes[$path]))$page=$routes[$path];
+elseif(preg_match('~^/category/([a-z0-9-]+)$~',$path,$m)){$page='reviews';$_GET['category']=$m[1];}
+elseif(preg_match('~^/([a-z0-9-]+)$~',$path,$m)){$page='review';$_GET['slug']=$m[1];}
+else $page='404';
+if($page==='404')http_response_code(404);
+
+if($page==='robots'){
+ header('Content-Type: text/plain; charset=utf-8');
+ echo "User-agent: *\nDisallow: /admin.php\n\nSitemap: https://".($_SERVER['HTTP_HOST']??'')."/sitemap.xml\n";exit;
+}
+if($page==='sitemap'){
+ header('Content-Type: application/xml; charset=utf-8');
+ $base='https://'.($_SERVER['HTTP_HOST']??'');
+ $urls=[['/',date('Y-m-d')]];
+ foreach(['reviews','top10','categories','compare','about','privacy'] as $p)$urls[]=[pagePath($p),null];
+ foreach(categories() as $c)if($c['total'])$urls[]=['/category/'.rawurlencode($c['slug']),null];
+ foreach(query('SELECT r.slug,r.updated_at FROM reviews r WHERE '.live().' ORDER BY r.published_at DESC') as $r)$urls[]=[reviewUrl($r),substr($r['updated_at'],0,10)];
+ echo '<?xml version="1.0" encoding="UTF-8"?>'."\n".'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
+ foreach($urls as [$u,$mod])echo '<url><loc>'.e($base.$u).'</loc>'.($mod?'<lastmod>'.e($mod).'</lastmod>':'').'</url>';
+ echo '</urlset>';exit;
+}
 
 // Newsletter sign-up
 if($_SERVER['REQUEST_METHOD']==='POST'&&($_POST['action']??'')==='subscribe'){
@@ -36,34 +64,34 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
   <p class="pill-eyebrow"><?= ficon('bolt','ic ic-xs') ?> Less guesswork. Better choices.</p>
   <h1 class="hero-title"><?= $headline(setting('tagline')) ?></h1>
   <p class="hero-sub"><?= e(setting('description')) ?></p>
-  <form action="/" class="hero-search" role="search"><input type="hidden" name="page" value="reviews"><?= ficon('search') ?><label for="hero-q" class="sr-only">Search reviews</label><input id="hero-q" name="q" placeholder="What are you looking for?"><button class="btn btn-primary" type="submit">Search <?= ficon('arrow','ic ic-sm') ?></button></form>
-  <div class="popular"><span>Popular:</span><a href="/?page=reviews&q=headphones">Headphones</a><a href="/?page=reviews&category=travel">Travel essentials</a><a href="/?page=reviews&category=home-improvement">Home upgrades</a><a href="/?page=reviews&category=tech">Tech</a></div>
+  <form action="/reviews" class="hero-search" role="search"><?= ficon('search') ?><label for="hero-q" class="sr-only">Search reviews</label><input id="hero-q" name="q" placeholder="What are you looking for?"><button class="btn btn-primary" type="submit">Search <?= ficon('arrow','ic ic-sm') ?></button></form>
+  <div class="popular"><span>Popular:</span><a href="/reviews?q=headphones">Headphones</a><a href="/category/travel">Travel essentials</a><a href="/category/home-improvement">Home upgrades</a><a href="/category/tech">Tech</a></div>
  </div>
  <div class="hero-media" data-slider>
   <span class="hero-tag"><?= ficon('star','ic ic-sm') ?> Thoughtfully Compared</span>
-  <div class="slide is-active"><img src="/assets/hero.jpg" alt="Headphones on a warm neutral background" fetchpriority="high"><div class="slide-card"><p class="eyebrow">Featured review</p><h2>Find your next favourite.</h2><p>Expert reviews, real research, honest opinions.</p><a class="link-arrow" href="/?page=reviews">Explore reviews <?= ficon('arrow','ic ic-sm') ?></a></div></div>
+  <div class="slide is-active"><img src="/assets/hero.jpg" alt="Headphones on a warm neutral background" fetchpriority="high"><div class="slide-card"><p class="eyebrow">Featured review</p><h2>Find your next favourite.</h2><p>Expert reviews, real research, honest opinions.</p><a class="link-arrow" href="/reviews">Explore reviews <?= ficon('arrow','ic ic-sm') ?></a></div></div>
   <?php foreach($slides as $s): ?><div class="slide" hidden><img src="<?= e($s['image']) ?>" alt="" loading="lazy"><div class="slide-card"><p class="eyebrow"><?= e($s['category']) ?></p><h2><?= e($s['title']) ?></h2><p><?= e(mb_strimwidth($s['excerpt'],0,90,'…')) ?></p><a class="link-arrow" href="<?= e(reviewUrl($s)) ?>">Read <?= $s['score']>0?'review':'article' ?> <?= ficon('arrow','ic ic-sm') ?></a></div></div><?php endforeach ?>
   <div class="slider-ui"><div class="dots"><?php for($i=0;$i<=count($slides);$i++): ?><button type="button" class="<?= $i?'':'is-active' ?>" data-slide="<?= $i ?>" aria-label="Show slide <?= $i+1 ?>"></button><?php endfor ?></div><button type="button" class="round-btn" data-prev aria-label="Previous slide"><?= ficon('left','ic ic-sm') ?></button><button type="button" class="round-btn" data-next aria-label="Next slide"><?= ficon('right','ic ic-sm') ?></button></div>
  </div>
 </div></section>
 
 <section class="wrap"><nav class="cat-strip" aria-label="Browse categories">
- <?php foreach(array_slice($cats,0,9) as $c): [$ic,$tone]=catStyle($c); ?><a href="/?page=reviews&category=<?= e($c['slug']) ?>"><span class="cat-dot tone-<?= $tone ?>"><?= ficon($ic) ?></span><?= e($c['name']) ?></a><?php endforeach ?>
- <a href="/?page=categories"><span class="cat-dot tone-slate"><?= ficon('dots') ?></span>More</a>
+ <?php foreach(array_slice($cats,0,9) as $c): [$ic,$tone]=catStyle($c); ?><a href="/category/<?= e($c['slug']) ?>"><span class="cat-dot tone-<?= $tone ?>"><?= ficon($ic) ?></span><?= e($c['name']) ?></a><?php endforeach ?>
+ <a href="/categories"><span class="cat-dot tone-slate"><?= ficon('dots') ?></span>More</a>
 </nav></section>
 
 <section class="wrap section">
- <div class="section-head"><div><p class="eyebrow">The latest word</p><h2 class="section-title">Reviews worth your time</h2><p class="section-sub">Honest reviews, practical advice, and top 10 lists to help you choose better.</p></div><a class="btn btn-outline" href="/?page=reviews">See all reviews <?= ficon('arrow','ic ic-sm') ?></a></div>
+ <div class="section-head"><div><p class="eyebrow">The latest word</p><h2 class="section-title">Reviews worth your time</h2><p class="section-sub">Honest reviews, practical advice, and top 10 lists to help you choose better.</p></div><a class="btn btn-outline" href="/reviews">See all reviews <?= ficon('arrow','ic ic-sm') ?></a></div>
  <div class="card-grid"><?php foreach($latest as $r) reviewCard($r); ?></div>
 </section>
 
 <section class="wrap section">
- <div class="section-head"><div><p class="eyebrow">Something for every day</p><h2 class="section-title">Explore your interests</h2><p class="section-sub">Browse our top categories and find reviews tailored to your needs.</p></div><a class="btn btn-outline" href="/?page=categories">View all categories <?= ficon('arrow','ic ic-sm') ?></a></div>
- <div class="interest-grid"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a class="interest" href="/?page=reviews&category=<?= e($c['slug']) ?>"><span class="cat-dot cat-dot-lg tone-<?= $tone ?>"><?= ficon($ic) ?></span><span><b><?= e($c['name']) ?></b><small><?= (int)$c['total'] ?> review<?= (int)$c['total']===1?'':'s' ?></small></span><?= ficon('right','ic ic-sm chev') ?></a><?php endforeach ?></div>
+ <div class="section-head"><div><p class="eyebrow">Something for every day</p><h2 class="section-title">Explore your interests</h2><p class="section-sub">Browse our top categories and find reviews tailored to your needs.</p></div><a class="btn btn-outline" href="/categories">View all categories <?= ficon('arrow','ic ic-sm') ?></a></div>
+ <div class="interest-grid"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a class="interest" href="/category/<?= e($c['slug']) ?>"><span class="cat-dot cat-dot-lg tone-<?= $tone ?>"><?= ficon($ic) ?></span><span><b><?= e($c['name']) ?></b><small><?= (int)$c['total'] ?> review<?= (int)$c['total']===1?'':'s' ?></small></span><?= ficon('right','ic ic-sm chev') ?></a><?php endforeach ?></div>
 </section>
 
 <section class="wrap section"><div class="why">
- <div class="why-intro"><p class="eyebrow">Why choose us?</p><h2 class="section-title">Clarity comes first.</h2><p>A considered approach to every review.<br>We research, compare and explain so you can choose with confidence.</p><a class="btn btn-outline" href="/?page=about#how">How we review <?= ficon('arrow','ic ic-sm') ?></a></div>
+ <div class="why-intro"><p class="eyebrow">Why choose us?</p><h2 class="section-title">Clarity comes first.</h2><p>A considered approach to every review.<br>We research, compare and explain so you can choose with confidence.</p><a class="btn btn-outline" href="/about#how">How we review <?= ficon('arrow','ic ic-sm') ?></a></div>
  <?php foreach([['doc','01','Research','Understand the features, the context and the choices.'],['scale','02','Compare','Look at the strengths and the trade-offs side by side.'],['bulb','03','Explain','Turn the details into practical, readable advice.']] as [$ic,$n,$t,$d]): ?><div class="why-step"><span class="cat-dot cat-dot-lg tone-teal"><?= ficon($ic) ?></span><h3><small><?= $n ?></small> <?= $t ?></h3><p><?= $d ?></p></div><?php endforeach ?>
 </div></section>
 
@@ -75,23 +103,29 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
  $order=$page==='top10'||$sort==='score'?'r.score DESC,r.published_at DESC,r.id DESC':($sort==='az'?'r.title COLLATE NOCASE':'r.published_at DESC,r.id DESC');
  $results=query($join.$where.' ORDER BY '.$order.($page==='top10'?' LIMIT 10':''),$params);
  $current=null;foreach($cats as $c)if($c['slug']===$cat)$current=$c;
+ $listUrl=function(string $catSlug) use($page,$q): string {
+  $params=$q!==''?['q'=>$q]:[];
+  if($catSlug==='')return pagePath($page).($params?'?'.http_build_query($params):'');
+  if($page==='reviews')return '/category/'.rawurlencode($catSlug).($params?'?'.http_build_query($params):'');
+  return pagePath($page).'?'.http_build_query(['category'=>$catSlug]+$params);
+ };
 ?>
 <section class="page-hero"><div class="wrap">
- <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><?php if($current): ?><a href="/?page=<?= $page ?>"><?= $page==='top10'?'Top 10 Lists':'Reviews' ?></a><?= ficon('right','ic ic-xs') ?><span><?= e($current['name']) ?></span><?php else: ?><span><?= $page==='top10'?'Top 10 Lists':'Reviews' ?></span><?php endif ?></nav>
+ <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><?php if($current): ?><a href="<?= pagePath($page) ?>"><?= $page==='top10'?'Top 10 Lists':'Reviews' ?></a><?= ficon('right','ic ic-xs') ?><span><?= e($current['name']) ?></span><?php else: ?><span><?= $page==='top10'?'Top 10 Lists':'Reviews' ?></span><?php endif ?></nav>
  <p class="eyebrow"><?= $page==='top10'?'The shortlist':'Find your next favourite' ?></p>
  <h1 class="page-title"><?= e($current?($page==='top10'?'Top 10 in '.$current['name']:$current['name']):($page==='top10'?'The top 10 edit':($q!==''?'Results for “'.$q.'”':'Explore our reviews'))) ?></h1>
  <p class="section-sub"><?= $page==='top10'?'Our ten highest-rated and most recent picks, ranked.':'Useful details, honest trade-offs and clear comparisons, all in one place.' ?></p>
- <form class="filter-bar" action="/"><input type="hidden" name="page" value="<?= e($page) ?>">
+ <form class="filter-bar" action="<?= pagePath($page) ?>">
   <label class="field-ic"><?= ficon('search') ?><input name="q" value="<?= e($q) ?>" placeholder="Search products, ideas and more" aria-label="Search"></label>
   <label class="field-ic"><?= ficon('grid') ?><select name="category" aria-label="Category"><option value="">All categories</option><?php foreach($cats as $c): ?><option value="<?= e($c['slug']) ?>" <?= $cat===$c['slug']?'selected':'' ?>><?= e($c['name']) ?></option><?php endforeach ?></select></label>
   <?php if($page==='reviews'): ?><label class="field-ic"><?= ficon('clock') ?><select name="sort" aria-label="Sort by"><option value="latest">Latest</option><option value="score" <?= $sort==='score'?'selected':'' ?>>Highest rated</option><option value="az" <?= $sort==='az'?'selected':'' ?>>A–Z</option></select></label><?php endif ?>
   <button class="btn btn-primary">Apply</button>
  </form>
- <div class="chip-row"><a class="<?= $cat===''?'is-active':'' ?>" href="/?page=<?= $page ?><?= $q!==''?'&q='.rawurlencode($q):'' ?>">All</a><?php foreach($cats as $c): ?><a class="<?= $cat===$c['slug']?'is-active':'' ?>" href="/?page=<?= $page ?>&category=<?= e($c['slug']) ?><?= $q!==''?'&q='.rawurlencode($q):'' ?>"><?= e($c['name']) ?></a><?php endforeach ?></div>
+ <div class="chip-row"><a class="<?= $cat===''?'is-active':'' ?>" href="<?= e($listUrl('')) ?>">All</a><?php foreach($cats as $c): ?><a class="<?= $cat===$c['slug']?'is-active':'' ?>" href="<?= e($listUrl($c['slug'])) ?>"><?= e($c['name']) ?></a><?php endforeach ?></div>
 </div></section>
 <section class="wrap section section-tight">
- <div class="result-bar"><span><?= count($results) ?> <?= count($results)===1?'result':'results' ?></span><a class="link-arrow" href="/?page=compare&category=<?= e($cat) ?>">Compare reviews <?= ficon('arrow','ic ic-sm') ?></a></div>
- <?php if(!$results): ?><div class="empty"><span class="cat-dot cat-dot-lg tone-teal"><?= ficon('search') ?></span><h2>No reviews found</h2><p>Try another keyword or explore a different category.</p><a class="btn btn-primary" href="/?page=<?= $page ?>">Clear filters</a></div>
+ <div class="result-bar"><span><?= count($results) ?> <?= count($results)===1?'result':'results' ?></span><a class="link-arrow" href="/compare?category=<?= e($cat) ?>">Compare reviews <?= ficon('arrow','ic ic-sm') ?></a></div>
+ <?php if(!$results): ?><div class="empty"><span class="cat-dot cat-dot-lg tone-teal"><?= ficon('search') ?></span><h2>No reviews found</h2><p>Try another keyword or explore a different category.</p><a class="btn btn-primary" href="<?= pagePath($page) ?>">Clear filters</a></div>
  <?php elseif($page==='top10'): ?><ol class="rank-list"><?php foreach($results as $i=>$r): ?><li class="rank"><span class="rank-num"><?= $i+1 ?></span><a class="rank-img" href="<?= e(reviewUrl($r)) ?>" tabindex="-1" aria-hidden="true"><img src="<?= e($r['image']) ?>" alt="" loading="lazy"></a><div class="rank-body"><span class="badge badge-<?= catStyle(['slug'=>$r['category_slug'],'id'=>$r['category_id']])[1] ?>"><?= e($r['category']) ?></span><h2><a href="<?= e(reviewUrl($r)) ?>"><?= e($r['title']) ?></a></h2><p><?= e($r['excerpt']) ?></p></div><div class="rank-side"><?php if($r['score']>0): ?><span class="score-big"><?= number_format((float)$r['score'],1) ?><small>/10</small></span><?php endif ?><a class="btn btn-outline" href="<?= e(reviewUrl($r)) ?>">Read <?= ficon('arrow','ic ic-sm') ?></a></div></li><?php endforeach ?></ol>
  <?php else: ?><div class="card-grid"><?php foreach($results as $r) reviewCard($r); ?></div><?php endif ?>
 </section>
@@ -107,7 +141,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
 ?>
 <div class="read-progress" aria-hidden="true"><span data-progress-bar></span></div>
 <article class="wrap post">
- <div class="post-top"><nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><a href="/?page=reviews&category=<?= e($r['category_slug']) ?>"><?= e($r['category']) ?></a><?= ficon('right','ic ic-xs') ?><span><?= e($r['title']) ?></span></nav>
+ <div class="post-top"><nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><a href="/category/<?= e($r['category_slug']) ?>"><?= e($r['category']) ?></a><?= ficon('right','ic ic-xs') ?><span><?= e($r['title']) ?></span></nav>
   <div class="progress-inline" aria-hidden="true"><span>Reading progress</span><i><b data-progress-bar></b></i><span data-progress-text>0%</span></div></div>
  <div class="post-grid">
   <div class="post-main">
@@ -129,7 +163,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
    <?php if($r['score']>0): ?><div class="side-card verdict"><p class="side-title"><span class="side-ic"><?= ficon('star','ic ic-sm') ?></span>Our verdict</p><p class="score-big"><?= number_format((float)$r['score'],1) ?><small>/10</small></p><p class="side-text"><?= e($r['verdict']) ?></p>
     <?php if(trim($r['pros'])!==''): ?><h3>What we like</h3><ul class="pc pc-pro"><?php foreach(array_filter(explode("\n",$r['pros'])) as $p): ?><li><?= ficon('check','ic ic-sm') ?><?= e($p) ?></li><?php endforeach ?></ul><?php endif ?>
     <?php if(trim($r['cons'])!==''): ?><h3>What could be better</h3><ul class="pc pc-con"><?php foreach(array_filter(explode("\n",$r['cons'])) as $p): ?><li><?= ficon('minus','ic ic-sm') ?><?= e($p) ?></li><?php endforeach ?></ul><?php endif ?>
-    <a class="btn btn-outline btn-block" href="/?page=compare&category=<?= e($r['category_slug']) ?>">Compare options <?= ficon('arrow','ic ic-sm') ?></a></div><?php endif ?>
+    <a class="btn btn-outline btn-block" href="/compare?category=<?= e($r['category_slug']) ?>">Compare options <?= ficon('arrow','ic ic-sm') ?></a></div><?php endif ?>
    <?php if(count($toc)>1||$hasCta): ?><nav class="side-card toc" aria-label="In this article"><p class="side-title"><span class="side-ic"><?= ficon('listnum','ic ic-sm') ?></span>In this article</p>
     <?php if(count($toc)>1): ?><ol><?php foreach($toc as $h): ?><li><a href="#<?= e(slug($h)) ?>" data-toc-link><?= e($h) ?></a></li><?php endforeach ?></ol><?php endif ?>
     <?php if($hasCta): ?><a class="btn btn-primary btn-block" href="<?= e($r['cta_url']) ?>" target="_blank" rel="sponsored nofollow noopener">Shop on <?= e($r['brand']) ?> <?= ficon('arrow','ic ic-sm') ?></a><?php endif ?></nav><?php endif ?>
@@ -139,7 +173,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
   </aside>
  </div>
 </article>
-<section class="wrap section"><div class="section-head"><h2 class="section-title">Keep exploring</h2><a class="link-arrow" href="/?page=reviews">View all articles <?= ficon('arrow','ic ic-sm') ?></a></div><div class="card-grid"><?php foreach($more as $x)reviewCard($x); ?></div></section>
+<section class="wrap section"><div class="section-head"><h2 class="section-title">Keep exploring</h2><a class="link-arrow" href="/reviews">View all articles <?= ficon('arrow','ic ic-sm') ?></a></div><div class="card-grid"><?php foreach($more as $x)reviewCard($x); ?></div></section>
 
 <?php elseif($page==='compare'):
  $cat=(string)($_GET['category']??'');$comp=query($join.'WHERE '.live().' AND r.score>0'.($cat!==''?' AND c.slug=?':'').' ORDER BY r.score DESC LIMIT 3',$cat!==''?[$cat]:[]);
@@ -147,10 +181,10 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
 <section class="page-hero"><div class="wrap">
  <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><span>Compare</span></nav>
  <p class="eyebrow">Side by side</p><h1 class="page-title">A clearer comparison</h1><p class="section-sub">Compare the three highest-rated reviews in a category.</p>
- <form class="filter-bar"><input type="hidden" name="page" value="compare"><label class="field-ic"><?= ficon('grid') ?><select name="category" aria-label="Category"><option value="">All categories</option><?php foreach($cats as $c): ?><option value="<?= e($c['slug']) ?>" <?= $cat===$c['slug']?'selected':'' ?>><?= e($c['name']) ?></option><?php endforeach ?></select></label><button class="btn btn-primary">Compare</button></form>
+ <form class="filter-bar" action="/compare"><label class="field-ic"><?= ficon('grid') ?><select name="category" aria-label="Category"><option value="">All categories</option><?php foreach($cats as $c): ?><option value="<?= e($c['slug']) ?>" <?= $cat===$c['slug']?'selected':'' ?>><?= e($c['name']) ?></option><?php endforeach ?></select></label><button class="btn btn-primary">Compare</button></form>
 </div></section>
 <section class="wrap section section-tight">
- <?php if(!$comp): ?><div class="empty"><span class="cat-dot cat-dot-lg tone-teal"><?= ficon('scale') ?></span><h2>Nothing to compare yet</h2><p>There are no scored reviews in this category yet. Try another category or browse all reviews.</p><a class="btn btn-primary" href="/?page=reviews<?= $cat!==''?'&category='.e($cat):'' ?>">Browse reviews</a></div>
+ <?php if(!$comp): ?><div class="empty"><span class="cat-dot cat-dot-lg tone-teal"><?= ficon('scale') ?></span><h2>Nothing to compare yet</h2><p>There are no scored reviews in this category yet. Try another category or browse all reviews.</p><a class="btn btn-primary" href="/reviews<?= $cat!==''?'&category='.e($cat):'' ?>">Browse reviews</a></div>
  <?php else: ?><div class="compare-grid"><?php foreach($comp as $i=>$r): ?><article class="compare-card<?= $i===0?' is-top':'' ?>"><?php if($i===0): ?><span class="top-pick"><?= ficon('trophy','ic ic-sm') ?> Top pick</span><?php endif ?><img src="<?= e($r['image']) ?>" alt="" loading="lazy"><div class="compare-body"><span class="badge badge-<?= catStyle(['slug'=>$r['category_slug'],'id'=>$r['category_id']])[1] ?>"><?= e($r['category']) ?></span><h2><?= e($r['title']) ?></h2><p class="score-big"><?= number_format((float)$r['score'],1) ?><small>/10</small></p><h3>Pros</h3><ul class="pc pc-pro"><?php foreach(array_filter(explode("\n",$r['pros'])) as $p): ?><li><?= ficon('check','ic ic-sm') ?><?= e($p) ?></li><?php endforeach ?></ul><h3>Cons</h3><ul class="pc pc-con"><?php foreach(array_filter(explode("\n",$r['cons'])) as $p): ?><li><?= ficon('minus','ic ic-sm') ?><?= e($p) ?></li><?php endforeach ?></ul><a class="btn btn-primary btn-block" href="<?= e(reviewUrl($r)) ?>">Read full review</a></div></article><?php endforeach ?></div><?php endif ?>
 </section>
 
@@ -159,7 +193,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
  <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><span>Categories</span></nav>
  <p class="eyebrow">Discover something useful</p><h1 class="page-title">Everyday interests. Explored.</h1><p class="section-sub">Find reviews and ideas in the categories that matter to you.</p>
 </div></section>
-<section class="wrap section section-tight"><div class="cat-cards"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a class="cat-card" href="/?page=reviews&category=<?= e($c['slug']) ?>"><span class="cat-dot cat-dot-xl tone-<?= $tone ?>"><?= ficon($ic) ?></span><h2><?= e($c['name']) ?></h2><p><?= (int)$c['total'] ?> review<?= (int)$c['total']===1?'':'s' ?></p><span class="link-arrow">Explore <?= ficon('arrow','ic ic-sm') ?></span></a><?php endforeach ?></div></section>
+<section class="wrap section section-tight"><div class="cat-cards"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a class="cat-card" href="/category/<?= e($c['slug']) ?>"><span class="cat-dot cat-dot-xl tone-<?= $tone ?>"><?= ficon($ic) ?></span><h2><?= e($c['name']) ?></h2><p><?= (int)$c['total'] ?> review<?= (int)$c['total']===1?'':'s' ?></p><span class="link-arrow">Explore <?= ficon('arrow','ic ic-sm') ?></span></a><?php endforeach ?></div></section>
 
 <?php elseif($page==='about'||$page==='privacy'): ?>
 <section class="page-hero"><div class="wrap narrow-wrap">
@@ -185,7 +219,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
 </div></section>
 
 <?php else: ?>
-<section class="wrap section notfound"><span class="cat-dot cat-dot-xl tone-teal"><?= ficon('search') ?></span><p class="eyebrow">404</p><h1 class="page-title">This page took a different path.</h1><p class="section-sub">The page you are looking for doesn't exist or has moved.</p><div class="notfound-actions"><a class="btn btn-primary" href="/">Back to home</a><a class="btn btn-outline" href="/?page=reviews">Browse reviews</a></div></section>
+<section class="wrap section notfound"><span class="cat-dot cat-dot-xl tone-teal"><?= ficon('search') ?></span><p class="eyebrow">404</p><h1 class="page-title">This page took a different path.</h1><p class="section-sub">The page you are looking for doesn't exist or has moved.</p><div class="notfound-actions"><a class="btn btn-primary" href="/">Back to home</a><a class="btn btn-outline" href="/reviews">Browse reviews</a></div></section>
 <?php endif ?>
 </main>
 <?php footerView(); ?>

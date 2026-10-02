@@ -365,8 +365,9 @@ p{margin:0}
 .header-actions{display:flex;align-items:center;gap:6px;margin-left:auto}
 .search-btn{background:var(--bg-soft);border:1px solid var(--line)}
 .search-btn:hover{border-color:var(--brand);color:var(--brand)}
-.logo-img{width:40px;height:40px;object-fit:contain;border-radius:10px}
-.logo-sm .logo-img{width:32px;height:32px}
+.logo-img{display:block;height:46px;width:auto;max-width:260px;object-fit:contain}
+.logo-sm .logo-img{height:38px;max-width:220px}
+@media (max-width:680px){.logo-img{height:38px;max-width:180px}}
 .search-overlay{position:fixed;inset:0;z-index:90;display:flex;justify-content:center;align-items:flex-start;padding:10vh 20px 20px;background:rgba(10,24,32,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);overflow-y:auto;animation:fade .2s ease}
 .search-overlay[hidden]{display:none}
 .search-box{position:relative;width:100%;max-width:760px;padding:32px;border-radius:24px;background:var(--surface);box-shadow:var(--sh-lg)}

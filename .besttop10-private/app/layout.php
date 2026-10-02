@@ -6,9 +6,9 @@ function siteLogo(string $class='logo'): string {
  return '<a href="/" class="'.e($class).'"><span class="logo-mark">'.ficon('crown').'</span><span>'.e(setting('site_name')).'</span></a>';
 }
 function headerView(string $title='', string $description='', string $active='', array $seo=[]): void {
- $cats=categories();
+ $cats=array_values(array_filter(categories(),fn($c)=>(int)$c['total']>0)); // only categories with live posts
  $site=setting('site_name');
- $metaTitle=$title!==''?$title.' | '.$site:(setting('seo_title')?:$site);
+ $metaTitle=$title!==''?$title.' | '.$site:homeTitle();
  $metaDesc=mb_strimwidth(trim(preg_replace('/\s+/',' ',$description?:setting('description'))),0,300,'…');
  $base=siteBase();
  $path=rtrim((string)parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH),'/')?:'/';
@@ -29,8 +29,8 @@ function headerView(string $title='', string $description='', string $active='',
 <!doctype html><html lang="<?= e($lang) ?>"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($metaTitle) ?></title><meta name="description" content="<?= e($metaDesc) ?>"><meta name="robots" content="<?= e($robots) ?>"><?php if(setting('meta_keywords')!==''): ?><meta name="keywords" content="<?= e(setting('meta_keywords')) ?>"><?php endif ?><?php if(setting('google_verification')!==''): ?><meta name="google-site-verification" content="<?= e(setting('google_verification')) ?>"><?php endif ?><?php if(setting('bing_verification')!==''): ?><meta name="msvalidate.01" content="<?= e(setting('bing_verification')) ?>"><?php endif ?><?php if(setting('yandex_verification')!==''): ?><meta name="yandex-verification" content="<?= e(setting('yandex_verification')) ?>"><?php endif ?><?php if(setting('pinterest_verification')!==''): ?><meta name="p:domain_verify" content="<?= e(setting('pinterest_verification')) ?>"><?php endif ?>
 <link rel="canonical" href="<?= e($canonical) ?>"><meta property="og:type" content="<?= e($seo['type']??'website') ?>"><meta property="og:site_name" content="<?= e($site) ?>"><meta property="og:locale" content="<?= e(['de'=>'de_DE','fr'=>'fr_FR'][$lang]??'en_US') ?>"><meta property="og:url" content="<?= e($canonical) ?>"><meta property="og:title" content="<?= e($title!==''?$title:$metaTitle) ?>"><meta property="og:description" content="<?= e($metaDesc) ?>"><?php if($img!==''): ?><meta property="og:image" content="<?= e($img) ?>"><meta property="og:image:alt" content="<?= e($title!==''?$title:$site) ?>"><meta name="twitter:image" content="<?= e($img) ?>"><?php endif ?><meta name="twitter:card" content="<?= $img!==''?'summary_large_image':'summary' ?>"><meta name="twitter:title" content="<?= e($title!==''?$title:$metaTitle) ?>"><meta name="twitter:description" content="<?= e($metaDesc) ?>">
 <?php if(!empty($seo['published'])): ?><meta property="article:published_time" content="<?= e($seo['published']) ?>"><meta property="article:modified_time" content="<?= e($seo['modified']??$seo['published']) ?>"><?php if(!empty($seo['section'])): ?><meta property="article:section" content="<?= e($seo['section']) ?>"><?php endif ?><?php endif ?>
-<link rel="alternate" type="application/rss+xml" title="<?= e($site) ?>" href="/feed.xml"><link rel="icon" href="<?= e(setting('logo')!==''&&safeImage(setting('logo'))?setting('logo'):'/assets/favicon.svg') ?>"><link rel="stylesheet" href="/assets/site.css"><script src="/assets/app.js" defer></script>
-<?php $ga=setting('ga_id','G-Z6E5E0V0Q3'); if(preg_match('/^G-[A-Z0-9]{4,20}$/',$ga)&&!isset($_SESSION['admin'])): ?><script async src="https://www.googletagmanager.com/gtag/js?id=<?= e($ga) ?>"></script><script src="/assets/ga.js" data-ga="<?= e($ga) ?>"></script><?php endif ?>
+<link rel="alternate" type="application/rss+xml" title="<?= e($site) ?>" href="/feed.xml"><link rel="icon" href="<?= e(setting('logo')!==''&&safeImage(setting('logo'))?setting('logo'):'/assets/favicon.svg') ?>"><link rel="stylesheet" href="<?= e(asset('/assets/site.css')) ?>"><script src="<?= e(asset('/assets/app.js')) ?>" defer></script>
+<?php $ga=setting('ga_id','G-Z6E5E0V0Q3'); if(preg_match('/^G-[A-Z0-9]{4,20}$/',$ga)&&!isset($_SESSION['admin'])): ?><script async src="https://www.googletagmanager.com/gtag/js?id=<?= e($ga) ?>"></script><script src="<?= e(asset('/assets/ga.js')) ?>" data-ga="<?= e($ga) ?>"></script><?php endif ?>
 <script type="application/ld+json"><?= $ld ?></script>
 <?= customCode('code_head') ?>
 </head><body>
@@ -60,7 +60,7 @@ function headerView(string $title='', string $description='', string $active='',
   <p class="eyebrow">Search</p>
   <form class="search-big" action="/reviews" role="search"><?= ficon('search') ?><input name="q" placeholder="What are you looking for?" aria-label="Search reviews" data-search-input autocomplete="off"><button class="btn btn-primary">Search <?= ficon('arrow','ic ic-sm') ?></button></form>
   <p class="search-label">Popular searches</p>
-  <div class="popular"><a href="/reviews?q=headphones">Headphones</a><a href="/reviews?q=laptop">Laptops</a><a href="/reviews?q=travel">Travel</a><a href="/reviews?q=shopping">Online shopping</a><a href="/top-10">Top 10 lists</a></div>
+  <div class="popular"><?php foreach(popularLinks() as $l): ?><a href="<?= e($l['url']) ?>"><?= e($l['label']) ?></a><?php endforeach ?><a href="/top-10">Top 10 lists</a></div>
   <p class="search-label">Browse categories</p>
   <div class="search-cats"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a href="/category/<?= e($c['slug']) ?>"><span class="cat-dot tone-<?= $tone ?>"><?= ficon($ic,'ic ic-sm') ?></span><?= e($c['name']) ?></a><?php endforeach ?></div>
  </div>

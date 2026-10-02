@@ -213,6 +213,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    if(!$menu)throw new RuntimeException('Add at least one menu item.');
    if(count($menu)>10)throw new RuntimeException('Use at most 10 menu items.');
    $save('menu',json_encode($menu,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
+   $norm=fn($v)=>mb_strtolower(trim(preg_replace('/[\s[:punct:]]+/u',' ',$v)));if(trim((string)($_POST['seo_title']??''))!==''&&$norm((string)$_POST['seo_title'])===$norm(setting('description')))throw new RuntimeException('The homepage title repeats the meta description. Use a short branded title, e.g. “'.setting('site_name').' | Reviews, Comparisons & Buying Guides”.');
    foreach(['seo_title'=>200,'meta_keywords'=>500,] as $k=>$max){$v=trim((string)($_POST[$k]??''));if(strlen($v)>$max)throw new RuntimeException('An SEO field is too long.');$save($k,$v);}
    flash('Appearance saved.','/admin.php?view=appearance');
   }
@@ -260,7 +261,7 @@ if($me&&$view==='clicks'&&isset($_GET['export'])){
 if($logged&&!$me){unset($_SESSION['admin']);$logged=false;}
 $titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','clicks'=>'Clicks','appearance'=>'Appearance','seo'=>'SEO & Code','users'=>'Users','settings'=>'Settings'];
 if(!isset($titles[$view]))$view='dashboard';
-?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($logged?$titles[$view]:'Log in') ?> ‹ <?= e(setting('site_name')) ?></title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/admin.css"><script src="/assets/admin.js" defer></script></head>
+?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($logged?$titles[$view]:'Log in') ?> ‹ <?= e(setting('site_name')) ?></title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="<?= e(asset('/assets/admin.css')) ?>"><script src="<?= e(asset('/assets/admin.js')) ?>" defer></script></head>
 <body class="<?= $logged?'cms':'cms-login' ?>">
 <?php if(!$logged): ?>
 <aside class="login-art"><div><a class="login-logo" href="/"><img src="/assets/favicon.svg" alt=""><span><?= e(setting('site_name')) ?></span></a><p class="login-quote">Good choices start with great content.</p><p class="login-sub">Write, schedule and publish your reviews and guides from one calm workspace.</p></div><p class="login-foot">© <?= date('Y') ?> <?= e(setting('site_name')) ?></p></aside>
@@ -528,7 +529,8 @@ if(!isset($titles[$view]))$view='dashboard';
      <p class="hint">Quick links: <code>/reviews</code> · <code>/top-10</code> · <code>/categories</code> · <code>/compare</code> · <code>/about</code> · <code>/about#how</code> · <code>/category/tech</code></p>
     </section>
     <section class="box"><h2 class="box-title"><?= aicon('search','icon title-icon') ?> SEO</h2><div class="stack">
-     <label><span class="lbl">Homepage title <span class="muted" data-count-for="seo_title"></span></span><input class="input" name="seo_title" value="<?= e(setting('seo_title')) ?>" maxlength="200" placeholder="<?= e(setting('site_name')) ?>" data-count="60"></label>
+     <label><span class="lbl">Homepage title <span class="muted" data-count-for="seo_title"></span></span><input class="input" name="seo_title" value="<?= e(setting('seo_title')) ?>" maxlength="200" placeholder="<?= e(setting('site_name').' | Reviews, Comparisons & Buying Guides') ?>" data-count="60"></label>
+     <p class="hint">Shown as the browser/Google title of the homepage. Keep it different from the description; leave empty to use the placeholder.</p>
      <p class="hint">The default meta description is the homepage description in <a href="/admin.php?view=settings">Settings</a>. Each post has its own SEO title and description in the editor.</p>
      <label><span class="lbl">Keywords <span class="muted">(comma separated)</span></span><textarea class="input" name="meta_keywords" rows="2" maxlength="500" placeholder="best products, reviews, top 10 lists, buying guides"><?= e(setting('meta_keywords')) ?></textarea></label>
      <p class="hint">Verification codes, Google Analytics, custom header/footer code and AI SEO settings are in <a href="/admin.php?view=seo">SEO &amp; Code</a>.</p>

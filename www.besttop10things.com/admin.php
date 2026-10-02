@@ -253,7 +253,7 @@ if(!isset($titles[$view]))$view='dashboard';
  if($cat){$where.=' AND r.category_id=?';$params[]=$cat;}
  $total=(int)(query("SELECT COUNT(*) AS n FROM reviews r JOIN categories c ON c.id=r.category_id WHERE $where",$params)[0]['n']);$pages=max(1,(int)ceil($total/PER_PAGE));$page=min($page,$pages);
  $rows=query("SELECT r.*,c.name AS category FROM reviews r JOIN categories c ON c.id=r.category_id WHERE $where ORDER BY $orderby $dir,r.id DESC LIMIT ".PER_PAGE.' OFFSET '.(($page-1)*PER_PAGE),$params);
- $q=fn(array $over)=>'/admin.php?'.http_build_query(array_filter(['view'=>'posts','status'=>$status==='all'?null:$status,'s'=>$s?:null,'cat'=>$cat?:null,'orderby'=>$_GET['orderby']??null,'order'=>$_GET['order']??null]+$over+[],fn($v)=>$v!==null&&$v!==''));
+ $q=fn(array $over)=>'/admin.php?'.http_build_query(array_filter(array_merge(['view'=>'posts','status'=>$status==='all'?null:$status,'s'=>$s?:null,'cat'=>$cat?:null,'orderby'=>$_GET['orderby']??null,'order'=>$_GET['order']??null],$over),fn($v)=>$v!==null&&$v!==''));
  $self=$q(['p'=>$page>1?$page:null]);
  $sortLink=function(string $key,string $label)use($q,$dir){$cur=($_GET['orderby']??'date')===$key;$next=$cur&&$dir==='DESC'?'asc':'desc';return '<a class="sort'.($cur?' sorted':'').'" href="'.e($q(['orderby'=>$key,'order'=>$next,'p'=>null])).'">'.$label.'<svg class="sort-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="up'.($cur&&$dir==='ASC'?' on':'').'" d="m8 10 4-4 4 4"/><path class="down'.($cur&&$dir==='DESC'?' on':'').'" d="m8 14 4 4 4-4"/></svg></a>';};
  $chip=fn(int $id)=>['teal','violet','green','rose','amber','blue'][$id%6];

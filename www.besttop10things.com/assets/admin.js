@@ -155,3 +155,30 @@ if (editor) {
   editor.addEventListener('submit', () => { dirty = false; });
   window.addEventListener('beforeunload', event => { if (dirty) event.preventDefault(); });
 }
+
+// Appearance: header menu rows, library picks and SEO title counter
+const appearance = document.querySelector('[data-appearance]');
+if (appearance) {
+  const rows = appearance.querySelector('[data-menu-rows]');
+  const template = document.querySelector('[data-menu-template]');
+  appearance.querySelector('[data-menu-add]').addEventListener('click', () => {
+    rows.append(template.content.cloneNode(true));
+    rows.lastElementChild.querySelector('input').focus();
+  });
+  rows.addEventListener('click', event => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    const row = button.closest('[data-menu-row]');
+    if (button.hasAttribute('data-remove')) row.remove();
+    if (button.dataset.move === '-1' && row.previousElementSibling) row.previousElementSibling.before(row);
+    if (button.dataset.move === '1' && row.nextElementSibling) row.nextElementSibling.after(row);
+  });
+  appearance.querySelectorAll('[data-fill]').forEach(radio => radio.addEventListener('change', () => {
+    appearance.querySelector(`input[name="${radio.dataset.fill}"]`).value = radio.value;
+  }));
+  const seo = appearance.querySelector('[data-count]');
+  const label = appearance.querySelector(`[data-count-for="${seo.name}"]`);
+  const count = () => { label.textContent = `${seo.value.length}/${seo.dataset.count}`; label.classList.toggle('over', seo.value.length > Number(seo.dataset.count)); };
+  seo.addEventListener('input', count);
+  count();
+}

@@ -59,13 +59,16 @@ function savePost(array $in, int $id): int {
  $status=in_array($in['status']??'',['published','draft'],true)?$in['status']:'draft';
  $meta=[trim((string)($in['meta_title']??'')),trim((string)($in['meta_description']??''))];
  if(strlen($meta[0])>200||strlen($meta[1])>500)throw new RuntimeException('SEO title or description is too long.');
- $values=[$category,$title,$slug,trim((string)($in['excerpt']??''))?:autoExcerpt($body),$body,$image,$score,trim((string)($in['pros']??'')),trim((string)($in['cons']??'')),trim((string)($in['verdict']??'')),trim((string)($in['author']??''))?:'Editorial team',$status,empty($in['featured'])?0:1,empty($in['demo'])?0:1,$meta[0],$meta[1],$publishedAt,date('c')];
- $cols='category_id=?,title=?,slug=?,excerpt=?,body=?,image=?,score=?,pros=?,cons=?,verdict=?,author=?,status=?,featured=?,demo=?,meta_title=?,meta_description=?,published_at=?,updated_at=?';
+ $brand=[trim((string)($in['brand']??'')),trim((string)($in['brand_about']??'')),trim((string)($in['cta_url']??''))];
+ if($brand[2]!==''&&!preg_match('~^https://\S+$~i',$brand[2]))throw new RuntimeException('The brand link must start with https://.');
+ if(strlen($brand[0])>80||strlen($brand[1])>500)throw new RuntimeException('Brand name or description is too long.');
+ $values=[$category,$title,$slug,trim((string)($in['excerpt']??''))?:autoExcerpt($body),$body,$image,$score,trim((string)($in['pros']??'')),trim((string)($in['cons']??'')),trim((string)($in['verdict']??'')),trim((string)($in['author']??''))?:'Editorial team',$status,empty($in['featured'])?0:1,empty($in['demo'])?0:1,$meta[0],$meta[1],...$brand,$publishedAt,date('c')];
+ $cols='category_id=?,title=?,slug=?,excerpt=?,body=?,image=?,score=?,pros=?,cons=?,verdict=?,author=?,status=?,featured=?,demo=?,meta_title=?,meta_description=?,brand=?,brand_about=?,cta_url=?,published_at=?,updated_at=?';
  if($id){
   if(!query('SELECT id FROM reviews WHERE id=?',[$id]))throw new RuntimeException('Post not found.');
   run("UPDATE reviews SET $cols WHERE id=?",[...$values,$id]);return $id;
  }
- run('INSERT INTO reviews(category_id,title,slug,excerpt,body,image,score,pros,cons,verdict,author,status,featured,demo,meta_title,meta_description,published_at,updated_at,created_at) VALUES ('.implode(',',array_fill(0,19,'?')).')',[...$values,date('c')]);
+ run('INSERT INTO reviews(category_id,title,slug,excerpt,body,image,score,pros,cons,verdict,author,status,featured,demo,meta_title,meta_description,brand,brand_about,cta_url,published_at,updated_at,created_at) VALUES ('.implode(',',array_fill(0,22,'?')).')',[...$values,date('c')]);
  return (int)db()->lastInsertId();
 }
 
@@ -160,6 +163,32 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    foreach(['site_name','tagline','description'] as $k)run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,trim($_POST[$k])]);
    flash('Settings saved.','/admin.php?view=settings');
   }
+  if($action==='appearance'){
+   $save=fn(string $k,string $v)=>run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,$v]);
+   // Logo and social image: upload wins, then library pick, then URL field; a remove box clears it.
+   foreach(['logo','og_image'] as $k){
+    $upload=$_FILES[$k.'_upload']??null;
+    if(!empty($_POST[$k.'_remove']))$value='';
+    elseif($upload&&($upload['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_NO_FILE)$value=storeUpload($upload);
+    elseif(!empty($_POST[$k.'_pick']))$value=trim((string)$_POST[$k.'_pick']);
+    else $value=trim((string)($_POST[$k]??''));
+    if($value!==''&&!safeImage($value))throw new RuntimeException('Logo and social image must be HTTPS URLs or images from the media library.');
+    $save($k,$value);
+   }
+   $menu=[];
+   foreach((array)($_POST['menu_label']??[]) as $i=>$label){
+    $label=trim((string)$label);$url=trim((string)($_POST['menu_url'][$i]??''));$type=($_POST['menu_type'][$i]??'')==='categories'?'categories':'link';
+    if($label===''&&$url==='')continue;
+    if($label===''||strlen($label)>40)throw new RuntimeException('Each menu label must be 1–40 characters.');
+    if(!safeMenuUrl($url))throw new RuntimeException("The link for “{$label}” must start with / or https://.");
+    $menu[]=['label'=>$label,'url'=>$url,'type'=>$type];
+   }
+   if(!$menu)throw new RuntimeException('Add at least one menu item.');
+   if(count($menu)>10)throw new RuntimeException('Use at most 10 menu items.');
+   $save('menu',json_encode($menu,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
+   foreach(['seo_title'=>200,'meta_keywords'=>500,'google_verification'=>200] as $k=>$max){$v=trim((string)($_POST[$k]??''));if(strlen($v)>$max)throw new RuntimeException('An SEO field is too long.');$save($k,$v);}
+   flash('Appearance saved.','/admin.php?view=appearance');
+  }
   if($action==='password'){
    $user=query('SELECT * FROM admins WHERE id=?',[$_SESSION['admin']])[0];
    if(!password_verify((string)($_POST['current_password']??''),$user['password']))throw new RuntimeException('Current password is incorrect.');
@@ -172,7 +201,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 
 $me=$logged?(query('SELECT * FROM admins WHERE id=?',[$_SESSION['admin']])[0]??null):null;
 if($logged&&!$me){unset($_SESSION['admin']);$logged=false;}
-$titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','users'=>'Users','settings'=>'Settings'];
+$titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','appearance'=>'Appearance','users'=>'Users','settings'=>'Settings'];
 if(!isset($titles[$view]))$view='dashboard';
 ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($logged?$titles[$view]:'Log in') ?> ‹ <?= e(setting('site_name')) ?></title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/admin.css"><script src="/assets/admin.js" defer></script></head>
 <body class="<?= $logged?'cms':'cms-login' ?>">
@@ -196,7 +225,7 @@ if(!isset($titles[$view]))$view='dashboard';
  $now=now();
  $count=fn(string $where)=>(int)db()->query("SELECT COUNT(*) FROM reviews r WHERE $where")->fetchColumn();
  $counts=['all'=>$count("r.status!='trash'"),'published'=>$count(live()),'scheduled'=>$count("r.status='published' AND r.published_at>'$now'"),'draft'=>$count("r.status='draft'"),'trash'=>$count("r.status='trash'")];
- $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
+ $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'appearance'=>['Appearance','image'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
 ?>
 <header class="cms-top">
  <button type="button" class="cms-menu" data-side-toggle aria-label="Toggle menu"><?= aicon('menu') ?></button>
@@ -300,7 +329,7 @@ if(!isset($titles[$view]))$view='dashboard';
 
 <?php elseif($view==='edit'):
  $id=(int)($_GET['id']??0);
- $r=$id?(query('SELECT * FROM reviews WHERE id=?',[$id])[0]??null):['id'=>0,'title'=>'','slug'=>'','category_id'=>'','excerpt'=>'','body'=>'','image'=>'','score'=>'0','pros'=>'','cons'=>'','verdict'=>'','author'=>'Editorial team','status'=>'draft','featured'=>0,'demo'=>0,'meta_title'=>'','meta_description'=>'','published_at'=>''];
+ $r=$id?(query('SELECT * FROM reviews WHERE id=?',[$id])[0]??null):['id'=>0,'title'=>'','slug'=>'','category_id'=>'','excerpt'=>'','body'=>'','image'=>'','score'=>'0','pros'=>'','cons'=>'','verdict'=>'','author'=>'Editorial team','status'=>'draft','featured'=>0,'demo'=>0,'meta_title'=>'','meta_description'=>'','brand'=>'','brand_about'=>'','cta_url'=>'','published_at'=>''];
  if($r&&$error&&($_POST['action']??'')==='save_post')$r=array_merge($r,array_intersect_key($_POST,$r),['featured'=>isset($_POST['featured']),'demo'=>isset($_POST['demo'])]);
  if(!$r): ?><p class="notice notice-error">Post not found.</p><?php else: $state=$id?postState($r):'new'; ?>
  <section class="panel"><?= pageHead('pen',$id?'Edit Post':'Add New Post',$id?'Update the content, settings and SEO of this post.':'Write something new. Save it as a draft or publish when ready.',$id?'<a class="button button-outline" href="/admin.php?view=posts">'.aicon('file').' All Posts</a><a class="button button-primary" href="/admin.php?view=edit">'.aicon('plus').' Add New</a>':'<a class="button button-outline" href="/admin.php?view=posts">'.aicon('file').' All Posts</a>') ?>
@@ -321,9 +350,14 @@ if(!isset($titles[$view]))$view='dashboard';
    <section class="box"><h2 class="box-title"><?= aicon('file','icon title-icon') ?> Excerpt</h2><textarea class="input" name="excerpt" rows="3" maxlength="600"><?= e($r['excerpt']) ?></textarea><p class="hint">Short summary shown on cards and in search results. Leave empty to generate it from the content.</p></section>
    <details class="box" <?= $r['score']>0||$r['pros']!==''?'open':'' ?>><summary class="box-title"><?= aicon('chart','icon title-icon') ?> Review Details <span class="muted">(optional — for product reviews)</span></summary><div class="stack">
     <label>Score out of 10 <input class="input input-sm" name="score" type="number" min="0" max="10" step="0.1" value="<?= e($r['score']) ?>"></label><p class="hint">Leave at 0 for a regular article: no rating badge or verdict box is shown.</p>
-    <label>Pros (one per line)<textarea class="input" name="pros" rows="3"><?= e($r['pros']) ?></textarea></label>
+    <label>Pros / Key takeaways (one per line)<textarea class="input" name="pros" rows="3"><?= e($r['pros']) ?></textarea></label>
     <label>Cons (one per line)<textarea class="input" name="cons" rows="3"><?= e($r['cons']) ?></textarea></label>
     <label>Final verdict<textarea class="input" name="verdict" rows="3"><?= e($r['verdict']) ?></textarea></label></div></details>
+   <section class="box"><h2 class="box-title"><?= aicon('send','icon title-icon') ?> Brand &amp; Call to Action <span class="muted">(optional)</span></h2><div class="stack">
+    <label>Brand name<input class="input" name="brand" value="<?= e($r['brand']) ?>" maxlength="80" placeholder="e.g. Temu"></label>
+    <label>Brand link (affiliate URL)<input class="input" name="cta_url" value="<?= e($r['cta_url']) ?>" placeholder="https://…"></label>
+    <label>About the brand<textarea class="input" name="brand_about" rows="2" maxlength="500"><?= e($r['brand_about']) ?></textarea></label>
+    <p class="hint">Shows a "Shop on …" button and an "About …" box in the article sidebar. Leave empty to hide them.</p></div></section>
    <section class="box"><h2 class="box-title"><?= aicon('search','icon title-icon') ?> SEO</h2><div class="stack">
     <label>SEO title <span class="muted" data-count-for="meta_title"></span><input class="input" name="meta_title" value="<?= e($r['meta_title']) ?>" maxlength="200" placeholder="<?= e($r['title']?:'Defaults to the post title') ?>" data-count="60"></label>
     <label>Meta description <span class="muted" data-count-for="meta_description"></span><textarea class="input" name="meta_description" rows="2" maxlength="500" placeholder="Defaults to the excerpt" data-count="160"><?= e($r['meta_description']) ?></textarea></label>
@@ -385,6 +419,53 @@ if(!isset($titles[$view]))$view='dashboard';
     <td class="nowrap"><div class="row-buttons"><button class="button button-outline button-sm" form="cat-<?= $c['id'] ?>">Save</button><form method="post" class="inline-form" data-confirm="Delete this category?"><?= csrfField() ?><input type="hidden" name="action" value="delete_category"><input type="hidden" name="id" value="<?= $c['id'] ?>"><button class="icon-danger" title="Delete category" aria-label="Delete <?= e($c['name']) ?>"><?= aicon('trash') ?></button></form></div></td></tr>
    <?php endforeach ?></tbody></table></div>
  </div></section>
+
+<?php elseif($view==='appearance'): $images=libraryImages();
+ // After a failed save, show what was submitted rather than the stored menu.
+ $menuRows=$error&&($_POST['action']??'')==='appearance'?array_map(fn($l,$u,$t)=>['label'=>(string)$l,'url'=>(string)$u,'type'=>(string)$t],(array)($_POST['menu_label']??[]),(array)($_POST['menu_url']??[]),(array)($_POST['menu_type']??[])):siteMenu(); ?>
+ <section class="panel"><?= pageHead('image','Appearance','Logo, header menu and SEO settings for the public site.','<a class="button button-outline" href="/" target="_blank">'.aicon('right').' View site</a>') ?>
+ <form method="post" enctype="multipart/form-data" class="appearance" data-appearance><?= csrfField() ?><input type="hidden" name="action" value="appearance">
+  <div class="two-col">
+   <div class="stack">
+    <?php foreach(['logo'=>['Logo','Shown in the header, footer and as the browser tab icon. A square image works best.'],'og_image'=>['Social share image','Used when the site is shared on Facebook, X, WhatsApp and others (1200×630 recommended).']] as $k=>[$label,$hint]): $cur=setting($k); ?>
+    <section class="box"><h2 class="box-title"><?= aicon('image','icon title-icon') ?> <?= $label ?></h2>
+     <div class="logo-preview<?= $k==='og_image'?' wide':'' ?>"><?php if($cur!==''): ?><img src="<?= e($cur) ?>" alt="Current <?= strtolower($label) ?>" data-preview-<?= $k ?>><?php else: ?><span class="muted" data-preview-<?= $k ?>><?= $k==='logo'?'Default crown icon':'None set' ?></span><?php endif ?></div>
+     <p class="hint"><?= $hint ?></p>
+     <label>Upload new<input class="input input-sm" type="file" name="<?= $k ?>_upload" accept="image/jpeg,image/png,image/webp"></label>
+     <details class="library"><summary>Choose from Media Library</summary><div class="library-grid"><?php foreach($images as $img): ?><label><input type="radio" name="<?= $k ?>_pick" value="<?= e($img) ?>" data-fill="<?= $k ?>"><img src="<?= e($img) ?>" alt="" loading="lazy"></label><?php endforeach ?></div></details>
+     <label>Or image URL<input class="input input-sm" name="<?= $k ?>" value="<?= e($cur) ?>" placeholder="https://… or /uploads/…"></label>
+     <?php if($cur!==''): ?><label class="check-row"><input type="checkbox" name="<?= $k ?>_remove" value="1"> Remove <?= strtolower($label) ?></label><?php endif ?>
+    </section>
+    <?php endforeach ?>
+   </div>
+   <div class="stack">
+    <section class="box"><h2 class="box-title"><?= aicon('menu','icon title-icon') ?> Header Menu</h2>
+     <p class="hint">Links can be site pages (start with <code>/</code>, e.g. <code>/?page=top10</code>) or full <code>https://</code> URLs. "Categories dropdown" shows every category under that item.</p>
+     <div class="menu-rows" data-menu-rows>
+      <?php foreach($menuRows as $item): ?>
+      <div class="menu-row" data-menu-row><span class="drag" aria-hidden="true">⋮⋮</span>
+       <input class="input" name="menu_label[]" value="<?= e($item['label']) ?>" placeholder="Label" aria-label="Menu label" maxlength="40">
+       <input class="input" name="menu_url[]" value="<?= e($item['url']) ?>" placeholder="/?page=… or https://…" aria-label="Menu link">
+       <select class="input" name="menu_type[]" aria-label="Item type"><option value="link">Link</option><option value="categories" <?= ($item['type']??'')==='categories'?'selected':'' ?>>Categories dropdown</option></select>
+       <span class="menu-btns"><button type="button" class="icon-danger" data-move="-1" aria-label="Move up" title="Move up">↑</button><button type="button" class="icon-danger" data-move="1" aria-label="Move down" title="Move down">↓</button><button type="button" class="icon-danger" data-remove aria-label="Remove item" title="Remove"><?= aicon('trash') ?></button></span>
+      </div>
+      <?php endforeach ?>
+     </div>
+     <div><button type="button" class="button button-outline" data-menu-add><?= aicon('plus') ?> Add menu item</button></div>
+     <p class="hint">Quick links: <code>/?page=reviews</code> · <code>/?page=top10</code> · <code>/?page=categories</code> · <code>/?page=compare</code> · <code>/?page=about</code> · <code>/?page=about#how</code> · <code>/?page=reviews&amp;category=tech</code></p>
+    </section>
+    <section class="box"><h2 class="box-title"><?= aicon('search','icon title-icon') ?> SEO</h2><div class="stack">
+     <label><span class="lbl">Homepage title <span class="muted" data-count-for="seo_title"></span></span><input class="input" name="seo_title" value="<?= e(setting('seo_title')) ?>" maxlength="200" placeholder="<?= e(setting('site_name')) ?>" data-count="60"></label>
+     <p class="hint">The default meta description is the homepage description in <a href="/admin.php?view=settings">Settings</a>. Each post has its own SEO title and description in the editor.</p>
+     <label><span class="lbl">Keywords <span class="muted">(comma separated)</span></span><textarea class="input" name="meta_keywords" rows="2" maxlength="500" placeholder="best products, reviews, top 10 lists, buying guides"><?= e(setting('meta_keywords')) ?></textarea></label>
+     <label>Google Search Console verification code<input class="input" name="google_verification" value="<?= e(setting('google_verification')) ?>" maxlength="200" placeholder="Only the content value, e.g. abc123…"></label>
+    </div></section>
+   </div>
+  </div>
+  <div class="save-bar"><button class="button button-primary button-lg"><?= aicon('send') ?> Save Appearance</button></div>
+ </form>
+ <template data-menu-template><div class="menu-row" data-menu-row><span class="drag" aria-hidden="true">⋮⋮</span><input class="input" name="menu_label[]" placeholder="Label" aria-label="Menu label" maxlength="40"><input class="input" name="menu_url[]" placeholder="/?page=… or https://…" aria-label="Menu link"><select class="input" name="menu_type[]" aria-label="Item type"><option value="link">Link</option><option value="categories">Categories dropdown</option></select><span class="menu-btns"><button type="button" class="icon-danger" data-move="-1" aria-label="Move up" title="Move up">↑</button><button type="button" class="icon-danger" data-move="1" aria-label="Move down" title="Move down">↓</button><button type="button" class="icon-danger" data-remove aria-label="Remove item" title="Remove"><?= aicon('trash') ?></button></span></div></template>
+ </section>
 
 <?php elseif($view==='users'): ?>
  <section class="panel"><?= pageHead('users','Users','People who can sign in to this workspace.') ?>

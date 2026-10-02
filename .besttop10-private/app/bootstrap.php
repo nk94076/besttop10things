@@ -36,5 +36,21 @@ function icon(string $name, string $class='h-5 w-5'): string {
  return '<svg class="'.e($class).'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'.($paths[$name]??$paths['grid']).'</svg>';
 }
 function reviewCard(array $r): void { ?>
- <article class="group min-w-0"><a href="<?= e(reviewUrl($r)) ?>" class="block"><div class="relative overflow-hidden rounded-lg"><img class="card-photo" src="<?= e($r['image']) ?>" alt="<?= e($r['title']) ?>" loading="lazy"><span class="absolute bottom-3 left-3 rounded bg-white px-3 py-1.5 text-sm font-bold shadow-sm"><span class="text-amber-500">★</span> <?= number_format((float)$r['score'],1) ?><span class="font-normal text-muted"> / 10</span></span></div><div class="mt-5 flex items-center justify-between"><span class="eyebrow"><?= e($r['category']) ?></span><?php if($r['demo']): ?><span class="text-[10px] text-muted">Sample review</span><?php endif ?></div><h3 class="mt-2 text-2xl leading-tight group-hover:text-teal"><?= e($r['title']) ?></h3><p class="mt-3 text-sm leading-6 text-muted"><?= e($r['excerpt']) ?></p><span class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-teal">Read full review <?= icon('arrow','h-4 w-4') ?></span></a></article>
+ <article class="group min-w-0"><a href="<?= e(reviewUrl($r)) ?>" class="block"><div class="relative overflow-hidden rounded-lg"><img class="card-photo" src="<?= e($r['image']) ?>" alt="<?= e($r['title']) ?>" loading="lazy"><?php if($r['score']>0): ?><span class="absolute bottom-3 left-3 rounded bg-white px-3 py-1.5 text-sm font-bold shadow-sm"><span class="text-amber-500">★</span> <?= number_format((float)$r['score'],1) ?><span class="font-normal text-muted"> / 10</span></span><?php endif ?></div><div class="mt-5 flex items-center justify-between"><span class="eyebrow"><?= e($r['category']) ?></span><?php if($r['demo']): ?><span class="text-[10px] text-muted">Sample review</span><?php endif ?></div><h3 class="mt-2 text-2xl leading-tight group-hover:text-teal"><?= e($r['title']) ?></h3><p class="mt-3 text-sm leading-6 text-muted"><?= e($r['excerpt']) ?></p><span class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-teal">Read <?= $r['score']>0?'full review':'article' ?> <?= icon('arrow','h-4 w-4') ?></span></a></article>
 <?php }
+
+function inlineMd(string $s): string {
+ $s=e($s);
+ $s=preg_replace_callback('~\[([^\]]+)\]\((https://[^\s)]+)\)~',fn($m)=>'<a href="'.$m[2].'" target="_blank" rel="sponsored nofollow noopener">'.$m[1].'</a>',$s);
+ return preg_replace('~\*\*(.+?)\*\*~','<strong>$1</strong>',$s);
+}
+function renderBody(string $body): string {
+ $html='';
+ foreach(preg_split('/\R\s*\R/',trim($body)) as $block){
+  $lines=preg_split('/\R/',trim($block));
+  if(preg_match('/^(#{2,4})\s+(.+)$/',$lines[0],$m)){$tag=strlen($m[1])===2?'h2':'h3';$html.='<'.$tag.' class="mb-4 mt-8 text-2xl">'.inlineMd($m[2]).'</'.$tag.'>';array_shift($lines);if(!$lines)continue;}
+  if(!array_filter($lines,fn($l)=>!preg_match('/^\s*[-*]\s+/',$l))){$html.='<ul>';foreach($lines as $l)$html.='<li>'.inlineMd(preg_replace('/^\s*[-*]\s+/','',$l)).'</li>';$html.='</ul>';continue;}
+  $html.='<p>'.implode('<br>',array_map('inlineMd',$lines)).'</p>';
+ }
+ return $html;
+}

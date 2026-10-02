@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS clicks (id INTEGER PRIMARY KEY, link_id INTEGER NOT N
 CREATE INDEX IF NOT EXISTS clicks_created ON clicks(created_at);
 CREATE INDEX IF NOT EXISTS clicks_post ON clicks(post_id);
 CREATE INDEX IF NOT EXISTS clicks_link ON clicks(link_id);');
+$db->exec('CREATE TABLE IF NOT EXISTS keyword_ideas (id INTEGER PRIMARY KEY, keyword TEXT NOT NULL UNIQUE, category_id INTEGER, source TEXT NOT NULL DEFAULT "", impressions INTEGER NOT NULL DEFAULT 0, position REAL NOT NULL DEFAULT 0, score INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT "new", post_id INTEGER, created_at TEXT NOT NULL)');
+$db->exec('CREATE TABLE IF NOT EXISTS post_revisions (id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL, title TEXT NOT NULL, meta_title TEXT NOT NULL DEFAULT "", meta_description TEXT NOT NULL DEFAULT "", tldr TEXT NOT NULL DEFAULT "", takeaways TEXT NOT NULL DEFAULT "", body TEXT NOT NULL, note TEXT NOT NULL DEFAULT "", created_at TEXT NOT NULL)');
+$db->exec('CREATE TABLE IF NOT EXISTS ai_suggestions (post_id INTEGER PRIMARY KEY, data TEXT NOT NULL, created_at TEXT NOT NULL)');
 $db->exec('CREATE TABLE IF NOT EXISTS social_posts (id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL, network TEXT NOT NULL, status TEXT NOT NULL, remote_id TEXT NOT NULL DEFAULT "", message TEXT NOT NULL DEFAULT "", created_at TEXT NOT NULL)');
 $db->exec('CREATE TABLE IF NOT EXISTS authors (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, slug TEXT NOT NULL UNIQUE, role TEXT NOT NULL DEFAULT "", bio TEXT NOT NULL DEFAULT "", avatar TEXT NOT NULL DEFAULT "", expertise TEXT NOT NULL DEFAULT "", links TEXT NOT NULL DEFAULT "", created_at TEXT NOT NULL)');
 if(!in_array('intro',array_column($db->query('PRAGMA table_info(categories)')->fetchAll(),'name'),true))$db->exec("ALTER TABLE categories ADD COLUMN intro TEXT NOT NULL DEFAULT ''");
@@ -305,6 +308,8 @@ function rated(string $alias='r'): string { return "$alias.score>0 AND (trim($al
 require_once __DIR__.'/images.php';
 require_once __DIR__.'/gsc.php';
 require_once __DIR__.'/social.php';
+require_once __DIR__.'/ai.php';
+require_once __DIR__.'/advisor.php';
 
 // ---- Authors (E-E-A-T) ----
 // Posts store the author's display name; a matching profile adds a photo, bio and an author page.

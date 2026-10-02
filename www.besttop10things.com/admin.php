@@ -38,7 +38,7 @@ function libraryImages(): array {
  return $images;
 }
 function aicon(string $name, string $class='icon'): string {
- static $p=['code'=>'<path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>','home'=>'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" fill="currentColor" stroke="none"/>','file'=>'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>','image'=>'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>','folder'=>'<path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>','users'=>'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>','gear'=>'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>','chart'=>'<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>','pen'=>'<path d="M4 20h16M14.5 4.5l3 3L8 17H5v-3z"/>','clock'=>'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>','trash'=>'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>','send'=>'<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>','calendar'=>'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>','right'=>'<path d="m9 6 6 6-6 6"/>','down'=>'<path d="m6 9 6 6 6-6"/>','plus'=>'<path d="M12 5v14M5 12h14"/>','search'=>'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>','sun'=>'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>','user'=>'<circle cx="12" cy="8" r="4" fill="currentColor" stroke="none"/><path d="M4 21a8 8 0 0 1 16 0z" fill="currentColor" stroke="none"/>','logout'=>'<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11"/>','menu'=>'<path d="M3 6h18M3 12h18M3 18h18"/>','crown'=>'<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" fill="currentColor" stroke="none"/>'];
+ static $p=['trophy'=>'<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/>','bulb'=>'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>','code'=>'<path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>','home'=>'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" fill="currentColor" stroke="none"/>','file'=>'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>','image'=>'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>','folder'=>'<path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>','users'=>'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>','gear'=>'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>','chart'=>'<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>','pen'=>'<path d="M4 20h16M14.5 4.5l3 3L8 17H5v-3z"/>','clock'=>'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>','trash'=>'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>','send'=>'<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>','calendar'=>'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>','right'=>'<path d="m9 6 6 6-6 6"/>','down'=>'<path d="m6 9 6 6 6-6"/>','plus'=>'<path d="M12 5v14M5 12h14"/>','search'=>'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>','sun'=>'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>','user'=>'<circle cx="12" cy="8" r="4" fill="currentColor" stroke="none"/><path d="M4 21a8 8 0 0 1 16 0z" fill="currentColor" stroke="none"/>','logout'=>'<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11"/>','menu'=>'<path d="M3 6h18M3 12h18M3 18h18"/>','crown'=>'<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" fill="currentColor" stroke="none"/>'];
  return '<svg class="'.e($class).'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'.($p[$name]??$p['file']).'</svg>';
 }
 function pageHead(string $icon, string $title, string $sub, string $actions=''): string {
@@ -147,6 +147,26 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    if($do==='publish')indexNowPing(array_map('reviewUrl',query("SELECT slug FROM reviews r WHERE id IN ($in) AND ".live(),$ids)));
    $n=count($ids);$labels=['publish'=>'published','draft'=>'moved to drafts','trash'=>'moved to the Trash','restore'=>'restored from the Trash','delete'=>'permanently deleted'];
    flash("$n post".($n>1?'s':'')." {$labels[$do]}.",backTo('/admin.php?view=posts'));
+  }
+  if($action==='ai_key'){
+   if(isset($_POST['ai_remove'])){@unlink(AI_KEY_FILE);flash('AI key removed.','/admin.php?view=seo#ai');}
+   aiSaveKey(trim((string)($_POST['anthropic_key']??'')));flash('AI assistant connected.','/admin.php?view=seo#ai');
+  }
+  if(in_array($action,['advisor_settings','refresh_ideas','idea_status','idea_draft','ai_fixes','apply_fixes','discard_fixes','undo_revision'],true)){
+   $tab=(string)($_POST['tab']??'doctor');$back='/admin.php?view=advisor&tab='.rawurlencode($tab);
+   if($action==='advisor_settings'){foreach(['advisor_weekly_fixes','advisor_auto_meta'] as $k)run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,isset($_POST[$k])?'1':'0']);flash('Content Advisor settings saved.',$back);}
+   if($action==='refresh_ideas'){@set_time_limit(300);$n=refreshKeywordIdeas();flash("$n keyword ideas checked.",$back);}
+   if($action==='idea_status'){$st=(string)($_POST['status']??'');if(!in_array($st,['new','dismissed'],true))$st='new';run('UPDATE keyword_ideas SET status=? WHERE id=?',[$st,(int)($_POST['id']??0)]);flash($st==='dismissed'?'Idea hidden.':'Idea restored.',$back);}
+   if($action==='idea_draft'){
+    $iid=(int)($_POST['id']??0);run("UPDATE keyword_ideas SET status='queued' WHERE id=? AND status IN ('new','dismissed')",[$iid]);
+    processAiQueue(1);$pid=(int)(query('SELECT post_id FROM keyword_ideas WHERE id=? AND status=\'drafted\'',[$iid])[0]['post_id']??0);
+    if($pid)flash('Draft written. Review it, add your affiliate links and an image, then publish.','/admin.php?view=edit&id='.$pid);
+    flash('The draft is being written in the background. Refresh this page in a minute.',$back);
+   }
+   if($action==='ai_fixes'){$pid=(int)($_POST['id']??0);queueFixes($pid);$log=processAiQueue(1);flash(($log?end($log):'Working on it… refresh in a minute.'),$back.'#post-'.$pid);}
+   if($action==='discard_fixes'){run('DELETE FROM ai_suggestions WHERE post_id=?',[(int)($_POST['id']??0)]);flash('Suggestion discarded.',$back);}
+   if($action==='apply_fixes'){$pid=(int)($_POST['id']??0);flash(applyFixes($pid,['meta'=>isset($_POST['meta']),'tldr'=>isset($_POST['tldr']),'sections'=>(array)($_POST['sections']??[]),'faq'=>(array)($_POST['faq']??[])]).' You can undo it under History.',$back.'#post-'.$pid);}
+   if($action==='undo_revision'){flash(undoRevision((int)($_POST['id']??0)),'/admin.php?view=advisor&tab=history');}
   }
   if($action==='gsc_settings'){
    $prop=trim((string)($_POST['gsc_property']??''));
@@ -312,7 +332,7 @@ if($me&&$view==='clicks'&&isset($_GET['export'])){
  exit;
 }
 if($logged&&!$me){unset($_SESSION['admin']);$logged=false;}
-$titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','clicks'=>'Clicks','search'=>'Search Console','authors'=>'Authors','appearance'=>'Appearance','seo'=>'SEO & Code','users'=>'Users','settings'=>'Settings'];
+$titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','clicks'=>'Clicks','search'=>'Search Console','advisor'=>'Content Advisor','authors'=>'Authors','appearance'=>'Appearance','seo'=>'SEO & Code','users'=>'Users','settings'=>'Settings'];
 if(!isset($titles[$view]))$view='dashboard';
 ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($logged?$titles[$view]:'Log in') ?> ‹ <?= e(setting('site_name')) ?></title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="<?= e(asset('/assets/admin.css')) ?>"><script src="<?= e(asset('/assets/admin.js')) ?>" defer></script></head>
 <body class="<?= $logged?'cms':'cms-login' ?>">
@@ -336,7 +356,7 @@ if(!isset($titles[$view]))$view='dashboard';
  $now=now();
  $count=fn(string $where)=>(int)db()->query("SELECT COUNT(*) FROM reviews r WHERE $where")->fetchColumn();
  $counts=['all'=>$count("r.status!='trash'"),'published'=>$count(live()),'scheduled'=>$count("r.status='published' AND r.published_at>'$now'"),'draft'=>$count("r.status='draft'"),'trash'=>$count("r.status='trash'")];
- $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'clicks'=>['Clicks','chart'],'search'=>['Search Console','search'],'authors'=>['Authors','users'],'appearance'=>['Appearance','image'],'seo'=>['SEO &amp; Code','code'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
+ $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'clicks'=>['Clicks','chart'],'search'=>['Search Console','search'],'advisor'=>['Content Advisor','trophy'],'authors'=>['Authors','users'],'appearance'=>['Appearance','image'],'seo'=>['SEO &amp; Code','code'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
 ?>
 <header class="cms-top">
  <button type="button" class="cms-menu" data-side-toggle aria-label="Toggle menu"><?= aicon('menu') ?></button>
@@ -547,6 +567,60 @@ if(!isset($titles[$view]))$view='dashboard';
    <?php endforeach ?></tbody></table></div>
  </div></section>
 
+<?php elseif($view==='advisor'): $tab=in_array($_GET['tab']??'',['doctor','ideas','history'],true)?$_GET['tab']:'doctor'; $ai=aiAvailable(); ?>
+ <section class="panel"><?= pageHead('trophy','Content Advisor','What to write next, why pages are not ranking, and AI-prepared fixes you can apply with one click.','<div class="seg-tabs">'.implode('',array_map(fn($k,$l)=>'<a class="'.($tab===$k?'active':'').'" href="/admin.php?view=advisor&tab='.$k.'">'.$l.'</a>',['doctor','ideas','history'],['Content doctor','Keyword ideas','History'])).'</div>') ?>
+ <?php if(!$ai): ?><p class="notice">AI fixes and drafts need the AI assistant: <a href="/admin.php?view=seo#ai">connect it in SEO &amp; Code</a>. The diagnosis and keyword ideas work without it.</p><?php endif ?>
+ <?php if(!gscKey()): ?><p class="notice">Connect <a href="/admin.php?view=search">Search Console</a> to add ranking data (missing searches, page-2 pages, low click-through) to the diagnosis.</p><?php endif ?>
+ <?php if($tab==='doctor'): $diag=array_filter(diagnosePosts(),fn($d)=>$d['issues']); $sugs=[];foreach(query('SELECT * FROM ai_suggestions') as $x)$sugs[$x['post_id']]=json_decode($x['data'],true); ?>
+  <p class="muted"><?= count($diag) ?> published post<?= count($diag)===1?'':'s' ?> with something to improve, most important first.</p>
+  <?php foreach(array_slice($diag,0,40) as $d): $p=$d['post'];$sg=$sugs[$p['id']]??null; ?>
+  <section class="box doc-card" id="post-<?= $p['id'] ?>">
+   <div class="doc-head"><div><a class="row-title" href="/admin.php?view=edit&id=<?= $p['id'] ?>"><?= e($p['title']) ?></a><br><span class="muted"><?= e($p['category']) ?> · SEO <?= $d['scores'][0] ?> · AI <?= $d['scores'][1] ?> · <a href="<?= e(reviewUrl($p)) ?>" target="_blank">view</a></span></div>
+    <div class="row-buttons"><?php if($sg&&!empty($sg['pending'])): ?><span class="chip chip-amber">AI is working…</span><?php elseif(!$sg): ?><form method="post"><?= csrfField() ?><input type="hidden" name="action" value="ai_fixes"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="button button-primary button-sm" <?= $ai?'':'disabled' ?>><?= aicon('bulb') ?> Get AI fixes</button></form><?php endif ?></div></div>
+   <ul class="check-list"><?php foreach($d['issues'] as [$sev,$code,$t,$detail]): ?><li class="<?= $sev>=3?'':'warn' ?>"><span><b><?= e($t) ?></b> — <?= e($detail) ?></span></li><?php endforeach ?></ul>
+   <?php if($sg&&empty($sg['pending'])): ?>
+    <form method="post" class="fix-box"><?= csrfField() ?><input type="hidden" name="action" value="apply_fixes"><input type="hidden" name="id" value="<?= $p['id'] ?>">
+     <p class="lbl"><?= aicon('bulb') ?> AI suggestion</p><p><?= e($sg['summary']) ?></p>
+     <label class="check-row"><input type="checkbox" name="meta" checked> <span><b>SEO title:</b> <s class="muted"><?= e($p['meta_title']?:$p['title']) ?></s> → <?= e($sg['meta_title']) ?><br><b>Description:</b> <?= e($sg['meta_description']) ?></span></label>
+     <label class="check-row"><input type="checkbox" name="tldr" checked> <span><b>Quick answer:</b> <?= e($sg['tldr']) ?></span></label>
+     <?php foreach($sg['new_sections'] as $i=>$sec): ?><label class="check-row"><input type="checkbox" name="sections[]" value="<?= $i ?>" checked> <span><b>New section: <?= e($sec['heading']) ?></b><details><summary class="muted">Preview</summary><div class="prose fix-preview"><?= renderBody($sec['markdown']) ?></div></details></span></label><?php endforeach ?>
+     <?php foreach($sg['faq'] as $i=>$f): ?><label class="check-row"><input type="checkbox" name="faq[]" value="<?= $i ?>" checked> <span><b>FAQ:</b> <?= e($f['q']) ?> <span class="muted"><?= e($f['a']) ?></span></span></label><?php endforeach ?>
+     <div class="row-buttons"><button class="button button-primary"><?= aicon('check') ?> Apply selected</button><button class="button button-outline" form="discard-<?= $p['id'] ?>">Discard</button></div>
+    </form><form id="discard-<?= $p['id'] ?>" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="discard_fixes"><input type="hidden" name="id" value="<?= $p['id'] ?>"></form>
+   <?php endif ?>
+  </section>
+  <?php endforeach ?>
+  <section class="box"><h2 class="box-title"><?= aicon('gear','icon title-icon') ?> Automation</h2>
+   <form method="post" class="stack"><?= csrfField() ?><input type="hidden" name="action" value="advisor_settings">
+    <label class="check-row"><input type="checkbox" name="advisor_weekly_fixes" <?= setting('advisor_weekly_fixes')==='1'?'checked':'' ?>> Every week, prepare AI fixes for the 3 posts with the biggest problems (you still approve them here)</label>
+    <label class="check-row"><input type="checkbox" name="advisor_auto_meta" <?= setting('advisor_auto_meta')==='1'?'checked':'' ?>> Automatically rewrite the SEO title &amp; description of pages with low click-through (max. once a month per page, undo in History)</label>
+    <p class="hint">Runs from <code>scripts/content-advisor.php</code> (add it to cron hourly). Article text is never changed automatically.</p>
+    <div><button class="button button-primary">Save</button></div></form></section>
+ <?php elseif($tab==='ideas'): $status=in_array($_GET['status']??'',['new','covered','drafted','dismissed'],true)?$_GET['status']:'new';
+  $ideas=query('SELECT k.*,c.name AS cat,r.title AS ptitle FROM keyword_ideas k LEFT JOIN categories c ON c.id=k.category_id LEFT JOIN reviews r ON r.id=k.post_id WHERE k.status'.($status==='new'?" IN ('new','queued')":'=?').' ORDER BY k.score DESC,k.impressions DESC LIMIT 150',$status==='new'?[]:[$status]); ?>
+  <div class="doc-head"><div class="seg-tabs"><?php foreach(['new'=>'To write','covered'=>'Already covered','drafted'=>'Drafted','dismissed'=>'Hidden'] as $k=>$l): ?><a class="<?= $status===$k?'active':'' ?>" href="/admin.php?view=advisor&tab=ideas&status=<?= $k ?>"><?= $l ?></a><?php endforeach ?></div>
+   <form method="post"><?= csrfField() ?><input type="hidden" name="action" value="refresh_ideas"><input type="hidden" name="tab" value="ideas"><button class="button button-outline"><?= aicon('clock') ?> Find new ideas</button></form></div>
+  <p class="hint">Ideas come from Google's autocomplete (real searches) around your categories and focus keywords<?= gscKey()?', plus Search Console queries you already appear for':'' ?>. <b>Score</b> favours long, specific searches you can win quickly. Last checked: <?= setting('ideas_refreshed')?e(date('M j, g:i a',strtotime(setting('ideas_refreshed')))):'never' ?>.</p>
+  <div class="table-wrap"><table class="list-table"><thead><tr><th>Keyword</th><th>Category</th><th>Score</th><th>Google</th><th class="kebab-col"></th></tr></thead><tbody>
+  <?php foreach($ideas as $i): ?><tr><td><b><?= e($i['keyword']) ?></b><br><span class="muted"><?= e($i['source']) ?><?= $i['ptitle']?' · '.e($i['ptitle']):'' ?></span></td><td><?= e($i['cat']??'') ?></td>
+   <td><span class="seo-score <?= $i['score']>=70?'good':($i['score']>=50?'ok':'bad') ?>"><?= (int)$i['score'] ?></span></td><td class="muted"><?= $i['impressions']?number_format($i['impressions']).' impr. · pos '.number_format($i['position'],1):'—' ?></td>
+   <td class="nowrap"><div class="row-buttons">
+    <?php if($i['status']==='queued'): ?><span class="chip chip-amber">Writing…</span>
+    <?php elseif($i['post_id']): ?><a class="button button-outline button-sm" href="/admin.php?view=edit&id=<?= (int)$i['post_id'] ?>">Open post</a>
+    <?php else: ?><form method="post" class="inline-form"><?= csrfField() ?><input type="hidden" name="action" value="idea_draft"><input type="hidden" name="tab" value="ideas"><input type="hidden" name="id" value="<?= $i['id'] ?>"><button class="button button-primary button-sm" <?= $ai?'':'disabled' ?> title="AI writes a full draft (not published)">AI draft</button></form><a class="button button-outline button-sm" href="/admin.php?view=edit&title=<?= rawurlencode(ucfirst($i['keyword'])) ?>">Write</a><?php endif ?>
+    <?php if(in_array($i['status'],['new','dismissed'],true)): ?><form method="post" class="inline-form"><?= csrfField() ?><input type="hidden" name="action" value="idea_status"><input type="hidden" name="tab" value="ideas"><input type="hidden" name="id" value="<?= $i['id'] ?>"><input type="hidden" name="status" value="<?= $i['status']==='new'?'dismissed':'new' ?>"><button class="button button-outline button-sm"><?= $i['status']==='new'?'Hide':'Restore' ?></button></form><?php endif ?>
+   </div></td></tr><?php endforeach ?>
+  <?php if(!$ideas): ?><tr><td colspan="5" class="muted empty"><?= $status==='new'?'No ideas yet. Click “Find new ideas”.':'Nothing here.' ?></td></tr><?php endif ?>
+  </tbody></table></div>
+ <?php else: $revs=query('SELECT v.id,v.post_id,v.note,v.created_at,r.title FROM post_revisions v LEFT JOIN reviews r ON r.id=v.post_id ORDER BY v.id DESC LIMIT 60'); ?>
+  <p class="hint">A copy of the article is saved before every AI change. Undo restores that copy (and saves the current version first, so undo can be undone).</p>
+  <div class="table-wrap"><table class="list-table"><thead><tr><th>When</th><th>Article</th><th>Saved</th><th class="kebab-col"></th></tr></thead><tbody>
+  <?php foreach($revs as $v): ?><tr><td class="nowrap"><?= e(date('M j, g:i a',strtotime($v['created_at']))) ?></td><td><a href="/admin.php?view=edit&id=<?= (int)$v['post_id'] ?>"><?= e($v['title']??'#'.$v['post_id']) ?></a></td><td class="muted"><?= e($v['note']) ?></td>
+   <td><form method="post" data-confirm="Restore this version of the article?"><?= csrfField() ?><input type="hidden" name="action" value="undo_revision"><input type="hidden" name="id" value="<?= $v['id'] ?>"><button class="button button-outline button-sm">Restore</button></form></td></tr><?php endforeach ?>
+  <?php if(!$revs): ?><tr><td colspan="4" class="muted empty">No AI changes yet.</td></tr><?php endif ?>
+  </tbody></table></div>
+ <?php endif ?>
+ </section>
 <?php elseif($view==='search'):
  $days=in_array((int)($_GET['days']??28),[7,28,90],true)?(int)($_GET['days']??28):28;
  $end=date('Y-m-d',strtotime('-2 days'));$start=date('Y-m-d',strtotime("$end -".($days-1).' days'));
@@ -797,6 +871,12 @@ if(!isset($titles[$view]))$view='dashboard';
     <p class="hint">For Google: submit <code><?= e($base) ?>/sitemap.xml</code> in Search Console → Sitemaps, and use URL Inspection → Request indexing for new posts.</p>
    </div></section>
   </div>
+  <section class="box" id="ai"><h2 class="box-title"><?= aicon('bulb','icon title-icon') ?> AI assistant (Claude)</h2><div class="stack">
+   <?php if(aiAvailable()): ?><p><b class="chip chip-green">Connected</b> Used by the Content Advisor for article fixes, drafts and title rewrites.</p><?php elseif(!is_file(ROOT.'/vendor/autoload.php')): ?><p class="notice notice-error">Not installed yet. On the server run: <code>cd .besttop10-private &amp;&amp; composer install --no-dev</code></p><?php endif ?>
+   <label>Anthropic API key <span class="muted">(console.anthropic.com › API keys; usage is billed to your Anthropic account)</span><input class="input" type="password" name="anthropic_key" form="ai-form" autocomplete="off" placeholder="<?= aiKey()!==''?'•••••••• saved (paste a new key to replace)':'sk-ant-…' ?>"></label>
+   <p class="hint">Stored outside the website folder. The AI only suggests changes and writes drafts; nothing is published without you.</p>
+   <div class="row-buttons"><button class="button button-primary" form="ai-form"><?= aicon('send') ?> Save key</button><?php if(aiKey()!==''): ?><button class="button button-outline" form="ai-form" name="ai_remove" value="1">Remove</button><?php endif ?></div>
+  </div></section>
   <section class="box" id="pinterest"><h2 class="box-title"><?= aicon('send','icon title-icon') ?> Pinterest auto-posting</h2><div class="stack">
    <?php $boards=json_decode(setting('pinterest_boards'),true)?:[]; if(pinterestToken()!==''): ?><p><b class="chip chip-green">Connected</b> <?= count($boards) ?> board<?= count($boards)===1?'':'s' ?><?php if(setting('pinterest_board')!==''&&isset($boards[setting('pinterest_board')])): ?> · pinning to <b><?= e($boards[setting('pinterest_board')]) ?></b><?php endif ?></p><?php endif ?>
    <label>Access token <span class="muted">(developers.pinterest.com → your app → generate token with boards:read, pins:read, pins:write)</span><input class="input" type="password" name="pinterest_token" form="pinterest-form" autocomplete="off" placeholder="<?= pinterestToken()!==''?'•••••••• saved (paste a new one to replace)':'pina_…' ?>"></label>
@@ -820,6 +900,7 @@ if(!isset($titles[$view]))$view='dashboard';
   </div></section>
   <div class="save-bar"><button class="button button-primary button-lg"><?= aicon('send') ?> Save SEO settings</button></div>
  </form>
+ <form id="ai-form" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="ai_key"></form>
  <form id="pinterest-form" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="pinterest"></form>
  <form id="indexnow-all" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="indexnow_all"></form>
  </section>

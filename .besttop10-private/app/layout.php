@@ -1,8 +1,39 @@
 <?php
-function headerView(string $title='', string $description=''): void { ?>
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e(($title ? $title.' | ' : '').setting('site_name')) ?></title><meta name="description" content="<?= e($description ?: setting('description')) ?>"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/app.css"><script src="/assets/app.js" defer></script></head><body>
-<header class="border-b border-ink/10 bg-paper"><div class="wrap flex h-22 items-center justify-between gap-6"><a href="/" class="flex items-center gap-3"><img src="/assets/favicon.svg" class="h-8 w-8" alt=""><span class="font-serif text-xl font-bold tracking-tight sm:text-2xl"><?= e(setting('site_name')) ?></span></a><nav class="hidden items-center gap-8 text-xs font-semibold lg:flex" aria-label="Main navigation"><a href="/?page=reviews" class="hover:text-teal">Reviews</a><a href="/?page=top10" class="hover:text-teal">Top 10 Lists</a><a href="/?page=categories" class="hover:text-teal">Categories</a><a href="/?page=about" class="hover:text-teal">How We Review</a></nav><div class="flex items-center gap-4"><a href="/?page=reviews" aria-label="Search reviews"><?= icon('search') ?></a><button type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Open menu" class="lg:hidden"><?= icon('menu') ?></button></div></div><nav id="mobile-menu" class="wrap hidden space-y-4 border-t border-ink/10 py-5 text-sm lg:hidden" aria-label="Mobile navigation"><a class="block" href="/?page=reviews">Reviews</a><a class="block" href="/?page=top10">Top 10 Lists</a><a class="block" href="/?page=categories">Categories</a><a class="block" href="/?page=about">How We Review</a></nav></header>
+function headerView(string $title='', string $description='', string $active=''): void {
+ $cats=categories();
+ $nav=['reviews'=>'Reviews','top10'=>'Top 10 Lists','categories'=>'Categories','how'=>'How We Review','about'=>'About']; ?>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e(($title ? $title.' | ' : '').setting('site_name')) ?></title><meta name="description" content="<?= e($description ?: setting('description')) ?>"><meta property="og:title" content="<?= e($title ?: setting('site_name')) ?>"><meta property="og:description" content="<?= e($description ?: setting('description')) ?>"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/site.css"><script src="/assets/app.js" defer></script></head><body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header"><div class="wrap header-row">
+ <a href="/" class="logo"><span class="logo-mark"><?= ficon('crown') ?></span><span><?= e(setting('site_name')) ?></span></a>
+ <nav class="main-nav" aria-label="Main navigation">
+  <div class="nav-drop"><a href="/?page=reviews" class="<?= $active==='reviews'?'active':'' ?>">Reviews <?= ficon('down','ic ic-xs') ?></a>
+   <div class="drop-panel"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a href="/?page=reviews&category=<?= e($c['slug']) ?>"><span class="cat-dot tone-<?= $tone ?>"><?= ficon($ic,'ic ic-sm') ?></span><?= e($c['name']) ?></a><?php endforeach ?><a class="drop-all" href="/?page=reviews">All reviews <?= ficon('arrow','ic ic-sm') ?></a></div></div>
+  <a href="/?page=top10" class="<?= $active==='top10'?'active':'' ?>">Top 10 Lists</a>
+  <a href="/?page=categories" class="<?= $active==='categories'?'active':'' ?>">Categories</a>
+  <a href="/?page=about#how" class="<?= $active==='how'?'active':'' ?>">How We Review</a>
+  <a href="/?page=about" class="<?= $active==='about'?'active':'' ?>">About</a>
+ </nav>
+ <form class="header-search" action="/" role="search"><input type="hidden" name="page" value="reviews"><?= ficon('search') ?><input name="q" placeholder="Search reviews, products..." aria-label="Search reviews"></form>
+ <button type="button" class="icon-btn" data-theme-toggle aria-label="Toggle dark mode" title="Toggle dark mode"><?= ficon('sun') ?></button>
+ <button type="button" class="icon-btn menu-btn" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Open menu"><?= ficon('menu') ?></button>
+</div>
+<nav id="mobile-menu" class="mobile-menu" hidden aria-label="Mobile navigation"><div class="wrap">
+ <form class="mobile-search" action="/" role="search"><input type="hidden" name="page" value="reviews"><?= ficon('search') ?><input name="q" placeholder="Search reviews, products..." aria-label="Search reviews"></form>
+ <?php foreach(['reviews'=>'/?page=reviews','top10'=>'/?page=top10','categories'=>'/?page=categories','how'=>'/?page=about#how','about'=>'/?page=about'] as $k=>$href): ?><a href="<?= $href ?>"><?= $nav[$k] ?></a><?php endforeach ?>
+</div></nav></header>
 <?php }
+
 function footerView(): void { ?>
-<footer class="mt-16 border-t border-ink/10"><div class="wrap grid gap-8 py-12 md:grid-cols-2"><div><a href="/" class="font-serif text-2xl font-bold"><?= e(setting('site_name')) ?></a><p class="mt-3 max-w-sm text-sm leading-6 text-muted">A little more clarity. A better everyday choice.<br>Reviews and guides for the way you live.</p></div><div class="flex flex-wrap gap-x-8 gap-y-4 text-sm md:justify-end"><a href="/?page=categories">Explore categories</a><a href="/?page=about">How we review</a><a href="/?page=privacy">Privacy</a><a href="/admin.php">Editorial CMS</a></div></div><div class="wrap flex flex-wrap justify-between gap-3 border-t border-ink/10 py-5 text-xs text-muted"><span>© <?= date('Y') ?> <?= e(setting('site_name')) ?></span><span>Demo content is labelled. Scores are illustrative.</span></div></footer></body></html>
+<section class="wrap" id="newsletter"><div class="newsletter">
+ <span class="nl-icon"><?= ficon('mail') ?></span>
+ <div class="nl-copy"><p class="eyebrow eyebrow-light">Stay updated</p><h2>Get the latest reviews and top 10 lists</h2><p>Subscribe to get new articles, buying guides and recommendations straight to your inbox.</p></div>
+ <?php if(isset($_GET['subscribed'])): ?><p class="nl-done" role="status"><?= ficon('check') ?> Thanks! You're subscribed.</p>
+ <?php else: ?><form class="nl-form" method="post" action="/"><?= csrfField() ?><input type="hidden" name="action" value="subscribe"><?= ficon('mail','ic nl-field-ic') ?><input type="email" name="email" required maxlength="200" placeholder="Your email address" aria-label="Your email address"><button class="btn btn-primary">Subscribe <?= ficon('arrow','ic ic-sm') ?></button></form><?php endif ?>
+</div></section>
+<footer class="site-footer"><div class="wrap footer-row">
+ <div><a href="/" class="logo logo-sm"><span class="logo-mark"><?= ficon('crown') ?></span><span><?= e(setting('site_name')) ?></span></a><p class="footer-tag">A little more clarity. A better everyday choice.<br>Reviews and guides for the way you live.</p></div>
+ <nav class="footer-links" aria-label="Footer"><a href="/?page=categories">Explore categories</a><a href="/?page=about#how">How we review</a><a href="/?page=about">About</a><a href="/?page=privacy">Privacy</a><a href="/admin.php">Editorial CMS</a></nav>
+</div><div class="wrap footer-bottom"><span>© <?= date('Y') ?> <?= e(setting('site_name')) ?>. All rights reserved.</span><span>Some links are affiliate links. Scores are illustrative.</span></div></footer>
+</body></html>
 <?php }

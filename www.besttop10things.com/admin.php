@@ -411,6 +411,10 @@ if(!isset($titles[$view]))$view='dashboard';
  <form method="post" class="box stack narrow"><?= csrfField() ?><input type="hidden" name="action" value="settings"><h2 class="box-title"><?= aicon('home','icon title-icon') ?> General</h2>
   <?php foreach(['site_name'=>'Site Title','tagline'=>'Homepage headline','description'=>'Homepage description (also the default meta description)'] as $key=>$label): ?><label><?= $label ?><textarea class="input" name="<?= $key ?>" rows="2" required maxlength="500"><?= e(setting($key)) ?></textarea></label><?php endforeach ?>
   <div><button class="button button-primary"><?= aicon('send') ?> Save Changes</button></div></form>
+ <?php $subs=query('SELECT email,created_at FROM subscribers ORDER BY id DESC'); ?>
+ <section class="box narrow"><h2 class="box-title"><?= aicon('users','icon title-icon') ?> Newsletter Subscribers <span class="tag"><?= count($subs) ?></span></h2>
+  <?php if($subs): ?><div class="table-wrap"><table class="list-table"><thead><tr><th>Email</th><th>Subscribed</th></tr></thead><tbody><?php foreach($subs as $sub): ?><tr><td><?= e($sub['email']) ?></td><td class="muted"><?= e(date('M j, Y',strtotime($sub['created_at']))) ?></td></tr><?php endforeach ?></tbody></table></div>
+  <?php else: ?><p class="muted">No subscribers yet. People can sign up from the newsletter box at the bottom of every page.</p><?php endif ?></section>
  </section>
 <?php endif ?>
 </main>

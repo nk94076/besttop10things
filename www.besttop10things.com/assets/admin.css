@@ -492,3 +492,8 @@ body.cms{background:var(--navy)}
 .pos-top{background:#dcf5e7;color:#13753f}.pos-p1{background:#e3eefc;color:#1d4f9a}.pos-p2{background:#fdf0d5;color:#8a5a00}
 .setup-steps{margin:0;padding-left:20px;line-height:1.8}
 .seg-tabs{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:10px}.seg-tabs a{padding:6px 12px;border-radius:8px;color:var(--muted);font-weight:600;font-size:13.5px}.seg-tabs a.active{background:var(--brand,#0d8a8c);color:#fff}@media (max-width:900px){.glance-4{grid-template-columns:1fr 1fr}}
+/* Content Advisor */
+.doc-card{margin-bottom:16px}.doc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.fix-box{margin-top:14px;padding:14px;border:1px dashed var(--line-strong,#cbd5e1);border-radius:12px;background:var(--bg-soft,#f6f8fa);display:grid;gap:10px}
+.fix-box .check-row{align-items:flex-start}.fix-preview{font-size:14px;margin-top:6px}
+.chip-amber{background:#fdf0d5;color:#8a5a00}

@@ -67,6 +67,8 @@ function catStyle(array $c): array {
  $fallback=['tech'=>'laptop','shopping'=>'cart','travel'=>'plane','gadgets'=>'watch','home'=>'home','grid'=>'grid'];
  return $map[$c['slug']??'']??[$fallback[$c['icon']??'']??'tag',['teal','rose','blue','green','amber','violet'][((int)($c['id']??0))%6]];
 }
+// Homepage shows a section for every category with more than this many published posts.
+const CAT_SECTION_MIN=4;
 function readMinutes(string $body): int { return max(1,(int)round(str_word_count(strip_tags($body))/220)); }
 function reviewCard(array $r): void { $tone=catStyle(['slug'=>$r['category_slug']??'','id'=>$r['category_id']??0])[1]; ?>
  <article class="card">

@@ -85,6 +85,34 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
  <div class="card-grid"><?php foreach($latest as $r) reviewCard($r); ?></div>
 </section>
 
+<?php // One section per category with more than CAT_SECTION_MIN posts; layouts rotate so each section looks different.
+ $layouts=['feature','grid','spotlight','list'];
+ $sectionCats=array_values(array_filter($cats,fn($c)=>(int)$c['total']>CAT_SECTION_MIN));
+ foreach($sectionCats as $n=>$c):
+  [$ic,$tone]=catStyle($c); $layout=$layouts[$n%count($layouts)];
+  $posts=query($join.'WHERE '.live().' AND r.category_id=? ORDER BY r.featured DESC,r.published_at DESC,r.id DESC LIMIT '.($layout==='list'?6:5),[$c['id']]);
+  $lead=$posts[0]; $rest=array_slice($posts,1);
+?>
+<section class="wrap section cat-section cat-<?= $layout ?> tone-band-<?= $tone ?>">
+ <div class="section-head"><div class="cat-head"><span class="cat-dot cat-dot-lg tone-<?= $tone ?>"><?= ficon($ic) ?></span><div><p class="eyebrow">Best of <?= e($c['name']) ?></p><h2 class="section-title"><?= e($c['name']) ?></h2></div></div><a class="btn btn-outline" href="/category/<?= e($c['slug']) ?>">View all <?= (int)$c['total'] ?> <?= ficon('arrow','ic ic-sm') ?></a></div>
+ <?php if($layout==='feature'): ?>
+  <div class="feat-grid">
+   <a class="feat-main" href="<?= e(reviewUrl($lead)) ?>"><img src="<?= e($lead['image']) ?>" alt="" loading="lazy"><div class="feat-body"><span class="badge badge-<?= $tone ?>"><?= e($c['name']) ?></span><h3><?= e($lead['title']) ?></h3><p><?= e($lead['excerpt']) ?></p><span class="link-arrow">Read article <?= ficon('arrow','ic ic-sm') ?></span></div></a>
+   <ol class="feat-list"><?php foreach($rest as $i=>$r): ?><li><a href="<?= e(reviewUrl($r)) ?>"><span class="feat-num"><?= str_pad((string)($i+2),2,'0',STR_PAD_LEFT) ?></span><span><b><?= e($r['title']) ?></b><small><?= readMinutes($r['body']) ?> min read</small></span><img src="<?= e($r['image']) ?>" alt="" loading="lazy"></a></li><?php endforeach ?></ol>
+  </div>
+ <?php elseif($layout==='grid'): ?>
+  <div class="card-grid card-grid-4"><?php foreach(array_slice($posts,0,4) as $r) reviewCard($r); ?></div>
+ <?php elseif($layout==='spotlight'): ?>
+  <div class="spot-grid">
+   <a class="spot-main" href="<?= e(reviewUrl($lead)) ?>"><img src="<?= e($lead['image']) ?>" alt="" loading="lazy"><div class="spot-overlay"><span class="badge badge-<?= $tone ?>">Editor's pick</span><h3><?= e($lead['title']) ?></h3><span class="meta"><?= readMinutes($lead['body']) ?> min read</span></div></a>
+   <div class="spot-side"><?php foreach($rest as $r): ?><a class="spot-item" href="<?= e(reviewUrl($r)) ?>"><img src="<?= e($r['image']) ?>" alt="" loading="lazy"><b><?= e($r['title']) ?></b></a><?php endforeach ?></div>
+  </div>
+ <?php else: ?>
+  <div class="row-list"><?php foreach($posts as $r): ?><a class="row-item" href="<?= e(reviewUrl($r)) ?>"><img src="<?= e($r['image']) ?>" alt="" loading="lazy"><span><b><?= e($r['title']) ?></b><small><?= e(mb_strimwidth($r['excerpt'],0,110,'…')) ?></small><i class="meta"><?= e(date('M j, Y',strtotime($r['published_at']??$r['created_at']))) ?> • <?= readMinutes($r['body']) ?> min read</i></span></a><?php endforeach ?></div>
+ <?php endif ?>
+</section>
+<?php endforeach ?>
+
 <section class="wrap section">
  <div class="section-head"><div><p class="eyebrow">Something for every day</p><h2 class="section-title">Explore your interests</h2><p class="section-sub">Browse our top categories and find reviews tailored to your needs.</p></div><a class="btn btn-outline" href="/categories">View all categories <?= ficon('arrow','ic ic-sm') ?></a></div>
  <div class="interest-grid"><?php foreach($cats as $c): [$ic,$tone]=catStyle($c); ?><a class="interest" href="/category/<?= e($c['slug']) ?>"><span class="cat-dot cat-dot-lg tone-<?= $tone ?>"><?= ficon($ic) ?></span><span><b><?= e($c['name']) ?></b><small><?= (int)$c['total'] ?> review<?= (int)$c['total']===1?'':'s' ?></small></span><?= ficon('right','ic ic-sm chev') ?></a><?php endforeach ?></div>

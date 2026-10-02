@@ -1,0 +1,3 @@
+DejaVu fonts (DejaVuSans, DejaVuSans-Bold, DejaVuSerif-Bold) — Bitstream Vera / DejaVu license (free to use, embed and redistribute).
+https://dejavu-fonts.github.io/License.html
+Used to draw titles on generated social and Pinterest images.

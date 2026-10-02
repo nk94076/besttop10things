@@ -1,8 +1,9 @@
 <?php
+// With an uploaded logo only the image is shown (it already contains the name); otherwise the crown mark and site name.
 function siteLogo(string $class='logo'): string {
  $logo=setting('logo');
- $mark=$logo!==''&&safeImage($logo)?'<img class="logo-img" src="'.e($logo).'" alt="">':'<span class="logo-mark">'.ficon('crown').'</span>';
- return '<a href="/" class="'.e($class).'">'.$mark.'<span>'.e(setting('site_name')).'</span></a>';
+ if($logo!==''&&safeImage($logo))return '<a href="/" class="'.e($class).' has-logo"><img class="logo-img" src="'.e($logo).'" alt="'.e(setting('site_name')).'"></a>';
+ return '<a href="/" class="'.e($class).'"><span class="logo-mark">'.ficon('crown').'</span><span>'.e(setting('site_name')).'</span></a>';
 }
 function headerView(string $title='', string $description='', string $active=''): void {
  $cats=categories();

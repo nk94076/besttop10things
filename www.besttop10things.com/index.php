@@ -46,8 +46,13 @@ if($page==='robots'){
  header('Content-Type: text/plain; charset=utf-8');
  $rules="Allow: /\nDisallow: /admin.php\nDisallow: /go/\nDisallow: /*?q=\n";
  $out="User-agent: *\n$rules\n";
- // Search and AI answer engines are welcome to read and cite the articles.
- foreach(['Googlebot','Bingbot','Google-Extended','GPTBot','OAI-SearchBot','ChatGPT-User','ClaudeBot','Claude-SearchBot','Claude-User','PerplexityBot','Perplexity-User','Applebot','Applebot-Extended','DuckAssistBot','Meta-ExternalAgent','CCBot','Amazonbot'] as $bot)$out.="User-agent: $bot\n$rules\n";
+ // Search and AI answer engines: each group can be switched off in Admin → SEO & Code.
+ $groups=[['Googlebot','Bingbot','Applebot','DuckDuckBot'],
+  setting('ai_search','allow')==='allow'?['OAI-SearchBot','ChatGPT-User','PerplexityBot','Perplexity-User','Claude-SearchBot','Claude-User','DuckAssistBot']:[],
+  setting('ai_training','allow')==='allow'?['GPTBot','Google-Extended','ClaudeBot','Applebot-Extended','Meta-ExternalAgent','CCBot','Amazonbot']:[]];
+ foreach(array_merge(...$groups) as $bot)$out.="User-agent: $bot\n$rules\n";
+ if(setting('ai_search','allow')!=='allow')foreach(['OAI-SearchBot','ChatGPT-User','PerplexityBot','Perplexity-User','Claude-SearchBot','Claude-User','DuckAssistBot'] as $bot)$out.="User-agent: $bot\nDisallow: /\n\n";
+ if(setting('ai_training','allow')!=='allow')foreach(['GPTBot','Google-Extended','ClaudeBot','Applebot-Extended','Meta-ExternalAgent','CCBot','Amazonbot'] as $bot)$out.="User-agent: $bot\nDisallow: /\n\n";
  echo $out."Sitemap: ".siteBase()."/sitemap.xml\n";exit;
 }
 if($page==='sitemap'){
@@ -77,13 +82,13 @@ if($page==='llms'||$page==='llmsfull'){
  header('Content-Type: text/plain; charset=utf-8');header('X-Robots-Tag: noindex');
  $base=siteBase();$full=$page==='llmsfull';
  $rows=query('SELECT r.*,c.name AS category FROM reviews r JOIN categories c ON c.id=r.category_id WHERE '.live().' ORDER BY c.name,r.published_at DESC');
- echo '# '.setting('site_name')."\n\n> ".setting('description')."\n\nIndependent reviews, buying guides and top 10 lists. Each article is written and edited by our team; some links are affiliate links.\n\n## Sections\n\n- [All reviews]($base/reviews)\n- [Top 10 lists]($base/top-10)\n- [Categories]($base/categories)\n- [About]($base/about)\n";
+ echo '# '.setting('site_name')."\n\n> ".setting('description')."\n\n".(trim(setting('llms_intro'))?:'Independent reviews, buying guides and top 10 lists. Each article is written and edited by our team; some links are affiliate links.')."\n\n## Sections\n\n- [All reviews]($base/reviews)\n- [Top 10 lists]($base/top-10)\n- [Categories]($base/categories)\n- [About]($base/about)\n";
  if(!$full)echo "- [Full article text]($base/llms-full.txt)\n";
  $group=null;
  foreach($rows as $r){
-  if($full){echo "\n---\n\n# ".$r['title']."\n\nURL: $base".reviewUrl($r)."\nCategory: ".$r['category']."\nPublished: ".substr((string)($r['published_at']??$r['created_at']),0,10)."\n\n".trim(preg_replace('/\[([^\]]+)\]\([^)]+\)/','$1',$r['body']))."\n";continue;}
+  if($full){echo "\n---\n\n# ".$r['title']."\n\nURL: $base".reviewUrl($r)."\nCategory: ".$r['category']."\nPublished: ".substr((string)($r['published_at']??$r['created_at']),0,10).(trim($r['tldr'])!==''?"\n\nSummary: ".trim($r['tldr']):'').(trim($r['takeaways'])!==''?"\n\nKey takeaways:\n".implode("\n",array_map(fn($t)=>'- '.ltrim(trim($t),'-• '),array_filter(explode("\n",$r['takeaways']),'trim'))):'')."\n\n".trim(preg_replace('/\[([^\]]+)\]\([^)]+\)/','$1',$r['body']))."\n";continue;}
   if($group!==$r['category']){$group=$r['category'];echo "\n## $group\n\n";}
-  echo '- ['.$r['title']."]($base".reviewUrl($r).'): '.trim(preg_replace('/\s+/',' ',$r['excerpt']))."\n";
+  echo '- ['.$r['title']."]($base".reviewUrl($r).'): '.trim(preg_replace('/\s+/',' ',trim($r['tldr'])!==''?$r['tldr']:$r['excerpt']))."\n";
  }
  exit;
 }
@@ -114,11 +119,20 @@ if($page==='review'){
  $r0=$review;$url=$base.reviewUrl($r0);$lang=detectLang($r0['title'].' '.$r0['body']);
  $pub=date('c',strtotime($r0['published_at']??$r0['created_at']));$mod=date('c',max(strtotime($r0['updated_at']),strtotime($r0['published_at']??$r0['created_at'])));
  $pageTitle=$r0['meta_title']?:$r0['title'];$pageDesc=$r0['meta_description']?:$r0['excerpt'];
- $article=['@type'=>'BlogPosting','@id'=>$url.'#article','mainEntityOfPage'=>$url,'url'=>$url,'headline'=>mb_substr($r0['title'],0,110),'description'=>$pageDesc,'datePublished'=>$pub,'dateModified'=>$mod,'inLanguage'=>$lang,'articleSection'=>$r0['category'],'wordCount'=>str_word_count(strip_tags($r0['body'])),'author'=>['@type'=>'Organization','name'=>$r0['author']?:setting('site_name'),'url'=>$base.'/about'],'publisher'=>['@id'=>$base.'/#org'],'isPartOf'=>['@id'=>$base.'/#website']];
+ $stype=array_key_exists($r0['schema_type']??'',SCHEMA_TYPES)?$r0['schema_type']:'BlogPosting';if($stype==='Review'&&!($r0['score']>0&&($r0['brand']??'')!==''))$stype='BlogPosting';
+ $article=['@type'=>$stype,'@id'=>$url.'#article','mainEntityOfPage'=>$url,'url'=>$url,'headline'=>mb_substr($r0['title'],0,110),'description'=>$pageDesc,'datePublished'=>$pub,'dateModified'=>$mod,'inLanguage'=>$lang,'articleSection'=>$r0['category'],'wordCount'=>str_word_count(strip_tags($r0['body'])),'author'=>['@type'=>'Organization','name'=>$r0['author']?:setting('site_name'),'url'=>$base.'/about'],'publisher'=>['@id'=>$base.'/#org'],'isPartOf'=>['@id'=>$base.'/#website']];
  if(safeImage($r0['image']))$article['image']=['@type'=>'ImageObject','url'=>absUrl($r0['image'])];
- if(($r0['brand']??'')!=='')$article['mentions']=['@type'=>'Brand','name'=>$r0['brand']];
+ if(trim($r0['tldr']??'')!==''){$article['abstract']=trim($r0['tldr']);$article['speakable']=['@type'=>'SpeakableSpecification','cssSelector'=>['.quick-answer','.post-title']];}
+ if(($r0['focus_keyword']??'')!=='')$article['keywords']=$r0['focus_keyword'];
+ if($stype==='Review'){unset($article['articleSection'],$article['wordCount']);$article['itemReviewed']=['@type'=>'Organization','name'=>$r0['brand']];$article['reviewRating']=['@type'=>'Rating','ratingValue'=>(float)$r0['score'],'bestRating'=>10,'worstRating'=>0];$article['author']=['@type'=>'Person','name'=>$r0['author']?:setting('site_name')];}
+ if($stype==='HowTo'){preg_match_all('/^##\s+(.+)$/m',$r0['body'],$hs);$article=['@type'=>'HowTo','@id'=>$url.'#howto','name'=>$r0['title'],'description'=>$pageDesc,'inLanguage'=>$lang,'image'=>$article['image']??null,'step'=>array_map(fn($i,$h)=>['@type'=>'HowToStep','position'=>$i+1,'name'=>trim($h,' #*'),'url'=>$url.'#'.slug($h)],array_keys($hs[1]),$hs[1])];$article=array_filter($article);}
+ elseif(($r0['brand']??'')!=='')$article['mentions']=['@type'=>'Brand','name'=>$r0['brand']];
  $seo=['type'=>'article','image'=>$r0['image'],'published'=>$pub,'modified'=>$mod,'section'=>$r0['category'],'lang'=>$lang,'jsonld'=>[$article,$crumb([['Home','/'],[$r0['category'],'/category/'.rawurlencode($r0['category_slug'])],[$r0['title'],reviewUrl($r0)]])]];
  if($faq=faqFrom($r0['body']))$seo['jsonld'][]=['@type'=>'FAQPage','@id'=>$url.'#faq','mainEntity'=>array_map(fn($x)=>['@type'=>'Question','name'=>$x[0],'acceptedAnswer'=>['@type'=>'Answer','text'=>$x[1]]],$faq)];
+ if($custom=json_decode((string)($r0['custom_schema']??''),true))foreach(isset($custom['@type'])?[$custom]:(array)($custom['@graph']??$custom) as $node)if(is_array($node)&&isset($node['@type'])){unset($node['@context']);$seo['jsonld'][]=$node;}
+ if(($r0['og_image']??'')!==''&&safeImage($r0['og_image']))$seo['image']=$r0['og_image'];
+ if(($r0['seo_canonical']??'')!=='')$seo['canonical_abs']=$r0['seo_canonical'];
+ if(in_array($r0['seo_robots']??'',['noindex, follow','index, nofollow','noindex, nofollow'],true))$seo['robots']=$r0['seo_robots'];
  if(isset($_GET['preview']))$seo['robots']='noindex, nofollow';
 }elseif($page==='reviews'||$page==='top10'){
  $catSlug=(string)($_GET['category']??'');$curCat=null;foreach($cats as $c)if($c['slug']===$catSlug)$curCat=$c;
@@ -267,6 +281,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
    </div>
    <img class="post-img" src="<?= e($r['image']) ?>" alt="<?= e($r['title']) ?>">
    <?php if($r['demo']): ?><p class="note note-amber">This is a sample review. Images, ratings and observations demonstrate the website and do not represent a verified product test.</p><?php endif ?>
+   <?php $tk=array_values(array_filter(array_map('trim',explode("\n",$r['takeaways']??'')))); if(trim($r['tldr']??'')!==''||$tk): ?><aside class="quick-answer" aria-label="Quick answer"><p class="qa-label"><?= ficon('check','ic ic-sm') ?> Quick answer</p><?php if(trim($r['tldr'])!==''): ?><p class="qa-text"><?= e(trim($r['tldr'])) ?></p><?php endif ?><?php if($tk): ?><p class="qa-sub">Key takeaways</p><ul class="qa-list"><?php foreach($tk as $t): ?><li><?= e(ltrim($t,'-• ')) ?></li><?php endforeach ?></ul><?php endif ?></aside><?php endif ?>
    <div class="prose post-body"><?php trackPost((int)$r['id']); ?><?= renderBody($r['body']) ?></div>
    <?php if($hasCta): ?><div class="cta-band"><div><p class="eyebrow">Ready to explore?</p><h2><?= e($r['brand']) ?></h2><?php if($r['brand_about']!==''): ?><p><?= e($r['brand_about']) ?></p><?php endif ?></div><a class="btn btn-primary" href="<?= e(trackUrl($r['cta_url'],'cta-band',$r['brand'])) ?>" target="_blank" rel="sponsored nofollow noopener">Visit <?= e($r['brand']) ?> <?= ficon('external','ic ic-sm') ?></a></div><?php endif ?>
    <p class="disclose-line"><?= ficon('doc','ic ic-sm') ?> This article may contain affiliate links. We may earn a commission if you buy through them, at no extra cost to you.</p>

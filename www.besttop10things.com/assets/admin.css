@@ -470,3 +470,16 @@ body.cms{background:var(--navy)}
  .two-col>.table-wrap .title-cell .inline-form{flex:1}
  .row-buttons{justify-content:flex-start}
 }
+
+/* SEO & Code page, SEO / AI readiness checks */
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start;margin-bottom:20px}
+.settings-form>.box{margin-bottom:20px}
+.code-input{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.5}
+.seo-checks{border-top:1px solid var(--line);padding-top:12px}
+.seo-score{margin-left:6px;padding:2px 9px;border-radius:999px;font-size:12px;background:var(--bg-soft,#eef2f6)}
+.seo-score.good{background:#dcf5e7;color:#13753f}.seo-score.ok{background:#fdf0d5;color:#8a5a00}.seo-score.bad{background:#fde2e2;color:#a3262b}
+.check-list{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px;font-size:13.5px}
+.check-list li{display:flex;gap:8px;align-items:flex-start;line-height:1.45}
+.check-list li::before{content:"";flex:none;width:9px;height:9px;margin-top:5px;border-radius:50%;background:#d64545}
+.check-list li.pass::before{background:#1f9d55}.check-list li.warn::before{background:#e0a100}
+@media (max-width:900px){.grid-2{grid-template-columns:1fr}}

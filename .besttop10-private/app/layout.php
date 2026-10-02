@@ -12,7 +12,7 @@ function headerView(string $title='', string $description='', string $active='',
  $metaDesc=mb_strimwidth(trim(preg_replace('/\s+/',' ',$description?:setting('description'))),0,300,'…');
  $base=siteBase();
  $path=rtrim((string)parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH),'/')?:'/';
- $canonical=$base.($seo['canonical']??$path);
+ $canonical=$seo['canonical_abs']??$base.($seo['canonical']??$path);
  $img=(string)($seo['image']??'');if($img===''||!safeImage($img))$img=setting('og_image');
  $img=$img!==''&&safeImage($img)?absUrl($img):'';
  $logo=setting('logo');$logo=absUrl($logo!==''&&safeImage($logo)?$logo:'/assets/favicon.svg');
@@ -20,17 +20,21 @@ function headerView(string $title='', string $description='', string $active='',
  $robots=$seo['robots']??'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
  // Structured data: organisation + website on every page, plus page-specific nodes.
  $graph=[
-  ['@type'=>'Organization','@id'=>$base.'/#org','name'=>$site,'url'=>$base.'/','logo'=>['@type'=>'ImageObject','url'=>$logo],'description'=>setting('description')],
+  array_filter(['@type'=>'Organization','@id'=>$base.'/#org','name'=>$site,'url'=>$base.'/','logo'=>['@type'=>'ImageObject','url'=>$logo],'description'=>setting('org_about')?:setting('description'),'email'=>setting('org_email')?:null,'sameAs'=>array_values(array_filter(array_map('trim',explode("\n",setting('org_same_as'))),fn($u)=>preg_match('~^https://\S+$~',$u)))?:null,'knowsAbout'=>array_column($cats,'name')?:null]),
   ['@type'=>'WebSite','@id'=>$base.'/#website','url'=>$base.'/','name'=>$site,'description'=>setting('description'),'publisher'=>['@id'=>$base.'/#org'],'inLanguage'=>'en','potentialAction'=>['@type'=>'SearchAction','target'=>['@type'=>'EntryPoint','urlTemplate'=>$base.'/reviews?q={search_term_string}'],'query-input'=>'required name=search_term_string']],
  ];
  foreach($seo['jsonld']??[] as $node)$graph[]=$node;
+ sendCustomCodeCsp();
  $ld=json_encode(['@context'=>'https://schema.org','@graph'=>$graph],JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP); ?>
-<!doctype html><html lang="<?= e($lang) ?>"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($metaTitle) ?></title><meta name="description" content="<?= e($metaDesc) ?>"><meta name="robots" content="<?= e($robots) ?>"><?php if(setting('meta_keywords')!==''): ?><meta name="keywords" content="<?= e(setting('meta_keywords')) ?>"><?php endif ?><?php if(setting('google_verification')!==''): ?><meta name="google-site-verification" content="<?= e(setting('google_verification')) ?>"><?php endif ?><?php if(setting('bing_verification')!==''): ?><meta name="msvalidate.01" content="<?= e(setting('bing_verification')) ?>"><?php endif ?>
+<!doctype html><html lang="<?= e($lang) ?>"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($metaTitle) ?></title><meta name="description" content="<?= e($metaDesc) ?>"><meta name="robots" content="<?= e($robots) ?>"><?php if(setting('meta_keywords')!==''): ?><meta name="keywords" content="<?= e(setting('meta_keywords')) ?>"><?php endif ?><?php if(setting('google_verification')!==''): ?><meta name="google-site-verification" content="<?= e(setting('google_verification')) ?>"><?php endif ?><?php if(setting('bing_verification')!==''): ?><meta name="msvalidate.01" content="<?= e(setting('bing_verification')) ?>"><?php endif ?><?php if(setting('yandex_verification')!==''): ?><meta name="yandex-verification" content="<?= e(setting('yandex_verification')) ?>"><?php endif ?><?php if(setting('pinterest_verification')!==''): ?><meta name="p:domain_verify" content="<?= e(setting('pinterest_verification')) ?>"><?php endif ?>
 <link rel="canonical" href="<?= e($canonical) ?>"><meta property="og:type" content="<?= e($seo['type']??'website') ?>"><meta property="og:site_name" content="<?= e($site) ?>"><meta property="og:locale" content="<?= e(['de'=>'de_DE','fr'=>'fr_FR'][$lang]??'en_US') ?>"><meta property="og:url" content="<?= e($canonical) ?>"><meta property="og:title" content="<?= e($title!==''?$title:$metaTitle) ?>"><meta property="og:description" content="<?= e($metaDesc) ?>"><?php if($img!==''): ?><meta property="og:image" content="<?= e($img) ?>"><meta property="og:image:alt" content="<?= e($title!==''?$title:$site) ?>"><meta name="twitter:image" content="<?= e($img) ?>"><?php endif ?><meta name="twitter:card" content="<?= $img!==''?'summary_large_image':'summary' ?>"><meta name="twitter:title" content="<?= e($title!==''?$title:$metaTitle) ?>"><meta name="twitter:description" content="<?= e($metaDesc) ?>">
 <?php if(!empty($seo['published'])): ?><meta property="article:published_time" content="<?= e($seo['published']) ?>"><meta property="article:modified_time" content="<?= e($seo['modified']??$seo['published']) ?>"><?php if(!empty($seo['section'])): ?><meta property="article:section" content="<?= e($seo['section']) ?>"><?php endif ?><?php endif ?>
 <link rel="alternate" type="application/rss+xml" title="<?= e($site) ?>" href="/feed.xml"><link rel="icon" href="<?= e(setting('logo')!==''&&safeImage(setting('logo'))?setting('logo'):'/assets/favicon.svg') ?>"><link rel="stylesheet" href="/assets/site.css"><script src="/assets/app.js" defer></script>
 <?php $ga=setting('ga_id','G-Z6E5E0V0Q3'); if(preg_match('/^G-[A-Z0-9]{4,20}$/',$ga)&&!isset($_SESSION['admin'])): ?><script async src="https://www.googletagmanager.com/gtag/js?id=<?= e($ga) ?>"></script><script src="/assets/ga.js" data-ga="<?= e($ga) ?>"></script><?php endif ?>
-<script type="application/ld+json"><?= $ld ?></script></head><body>
+<script type="application/ld+json"><?= $ld ?></script>
+<?= customCode('code_head') ?>
+</head><body>
+<?= customCode('code_body') ?>
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-header"><div class="wrap header-row">
  <?= siteLogo() ?>
@@ -74,5 +78,6 @@ function footerView(): void { ?>
  <div><?= siteLogo('logo logo-sm') ?><p class="footer-tag">A little more clarity. A better everyday choice.<br>Reviews and guides for the way you live.</p></div>
  <nav class="footer-links" aria-label="Footer"><a href="/categories">Explore categories</a><a href="/about#how">How we review</a><a href="/about">About</a><a href="/privacy">Privacy</a></nav>
 </div><div class="wrap footer-bottom"><span>© <?= date('Y') ?> <?= e(setting('site_name')) ?>. All rights reserved.</span></div></footer>
+<?= customCode('code_footer') ?>
 </body></html>
 <?php }

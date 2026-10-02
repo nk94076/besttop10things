@@ -98,33 +98,48 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
 
 <?php elseif($page==='review'): $r=$review; $tone=catStyle(['slug'=>$r['category_slug'],'id'=>$r['category_id']])[1];
  preg_match_all('/^##\s+(.+)$/m',$r['body'],$m); $toc=array_map(fn($h)=>trim(str_replace('**','',preg_replace('~\[([^\]]+)\]\([^)]*\)~','$1',$h))),$m[1]);
+ $shareUrl='https://'.($_SERVER['HTTP_HOST']??'besttop10things.com').reviewUrl($r);
+ $share=['facebook'=>['Facebook','https://www.facebook.com/sharer/sharer.php?u='.rawurlencode($shareUrl)],'x'=>['X','https://twitter.com/intent/tweet?url='.rawurlencode($shareUrl).'&text='.rawurlencode($r['title'])],'pinterest'=>['Pinterest','https://pinterest.com/pin/create/button/?url='.rawurlencode($shareUrl).'&description='.rawurlencode($r['title'])],'linkedin'=>['LinkedIn','https://www.linkedin.com/sharing/share-offsite/?url='.rawurlencode($shareUrl)]];
+ $hasCta=$r['brand']!==''&&$r['cta_url']!=='';
+ $takeaways=$r['score']>0?[]:array_values(array_filter(array_map('trim',explode("\n",$r['pros']))));
+ $related=query($join.'WHERE '.live().' AND r.id!=? AND r.category_id=? ORDER BY r.published_at DESC,r.id DESC LIMIT 3',[$r['id'],$r['category_id']]);
+ $more=query($join.'WHERE '.live().' AND r.id!=? ORDER BY (r.category_id=?) DESC,r.published_at DESC LIMIT 3',[$r['id'],$r['category_id']]);
 ?>
-<article>
- <header class="article-hero"><div class="wrap article-head">
-  <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><a href="/?page=reviews&category=<?= e($r['category_slug']) ?>"><?= e($r['category']) ?></a><?= ficon('right','ic ic-xs') ?><span><?= $r['score']>0?'Review':'Article' ?></span></nav>
-  <span class="badge badge-<?= $tone ?>"><?= e($r['category']) ?></span>
-  <h1 class="article-title"><?= e($r['title']) ?></h1>
-  <p class="article-dek"><?= e($r['excerpt']) ?></p>
-  <p class="meta meta-lg"><span class="avatar-sm"><?= e(strtoupper(substr($r['author'],0,1))) ?></span><?= e($r['author']) ?><i>•</i>Updated <?= e(date('M j, Y',strtotime($r['updated_at']))) ?><i>•</i><?= readMinutes($r['body']) ?> min read</p>
- </div></header>
- <div class="wrap article-grid">
-  <div class="article-main">
-   <img class="article-img" src="<?= e($r['image']) ?>" alt="<?= e($r['title']) ?>">
+<div class="read-progress" aria-hidden="true"><span data-progress-bar></span></div>
+<article class="wrap post">
+ <div class="post-top"><nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><a href="/?page=reviews&category=<?= e($r['category_slug']) ?>"><?= e($r['category']) ?></a><?= ficon('right','ic ic-xs') ?><span><?= e($r['title']) ?></span></nav>
+  <div class="progress-inline" aria-hidden="true"><span>Reading progress</span><i><b data-progress-bar></b></i><span data-progress-text>0%</span></div></div>
+ <div class="post-grid">
+  <div class="post-main">
+   <span class="badge badge-<?= $tone ?>"><?= e($r['category']) ?></span>
+   <h1 class="post-title"><?= e($r['title']) ?></h1>
+   <p class="post-dek"><?= e($r['excerpt']) ?></p>
+   <div class="byline">
+    <span class="avatar-lg"><?= e(strtoupper(substr($r['author'],0,1))) ?></span>
+    <div><b><?= e($r['author']) ?></b><span class="meta"><?= e(date('M j, Y',strtotime($r['published_at']??$r['created_at']))) ?><i>•</i><?= readMinutes($r['body']) ?> min read<?php if(substr($r['updated_at'],0,10)!==substr((string)$r['published_at'],0,10)): ?><i>•</i>Updated <?= e(date('M j, Y',strtotime($r['updated_at']))) ?><?php endif ?></span></div>
+    <div class="share"><button type="button" class="share-btn" data-copy-link="<?= e($shareUrl) ?>" aria-label="Copy link" title="Copy link"><?= ficon('link','ic ic-sm') ?></button><?php foreach($share as $k=>[$label,$url]): ?><a class="share-btn share-<?= $k ?>" href="<?= e($url) ?>" target="_blank" rel="noopener" aria-label="Share on <?= $label ?>" title="Share on <?= $label ?>"><?= ficon($k,'ic ic-sm') ?></a><?php endforeach ?></div>
+   </div>
+   <img class="post-img" src="<?= e($r['image']) ?>" alt="<?= e($r['title']) ?>">
    <?php if($r['demo']): ?><p class="note note-amber">This is a sample review. Images, ratings and observations demonstrate the website and do not represent a verified product test.</p><?php endif ?>
-   <div class="prose"><?= renderBody($r['body']) ?></div>
+   <div class="prose post-body"><?= renderBody($r['body']) ?></div>
+   <?php if($hasCta): ?><div class="cta-band"><div><p class="eyebrow">Ready to explore?</p><h2><?= e($r['brand']) ?></h2><?php if($r['brand_about']!==''): ?><p><?= e($r['brand_about']) ?></p><?php endif ?></div><a class="btn btn-primary" href="<?= e($r['cta_url']) ?>" target="_blank" rel="sponsored nofollow noopener">Visit <?= e($r['brand']) ?> <?= ficon('external','ic ic-sm') ?></a></div><?php endif ?>
+   <p class="disclose-line"><?= ficon('doc','ic ic-sm') ?> This article may contain affiliate links. We may earn a commission if you buy through them, at no extra cost to you.</p>
   </div>
-  <aside class="article-side">
-   <?php if($r['score']>0): ?><div class="side-card verdict"><p class="eyebrow">Our verdict</p><p class="score-big"><?= number_format((float)$r['score'],1) ?><small>/10</small></p><p class="side-text"><?= e($r['verdict']) ?></p>
+  <aside class="post-side">
+   <?php if($r['score']>0): ?><div class="side-card verdict"><p class="side-title"><span class="side-ic"><?= ficon('star','ic ic-sm') ?></span>Our verdict</p><p class="score-big"><?= number_format((float)$r['score'],1) ?><small>/10</small></p><p class="side-text"><?= e($r['verdict']) ?></p>
     <?php if(trim($r['pros'])!==''): ?><h3>What we like</h3><ul class="pc pc-pro"><?php foreach(array_filter(explode("\n",$r['pros'])) as $p): ?><li><?= ficon('check','ic ic-sm') ?><?= e($p) ?></li><?php endforeach ?></ul><?php endif ?>
     <?php if(trim($r['cons'])!==''): ?><h3>What could be better</h3><ul class="pc pc-con"><?php foreach(array_filter(explode("\n",$r['cons'])) as $p): ?><li><?= ficon('minus','ic ic-sm') ?><?= e($p) ?></li><?php endforeach ?></ul><?php endif ?>
-    <a class="btn btn-primary btn-block" href="/?page=compare&category=<?= e($r['category_slug']) ?>">Compare options <?= ficon('arrow','ic ic-sm') ?></a></div>
-   <?php endif ?>
-   <?php if(count($toc)>1): ?><nav class="side-card toc" aria-label="In this article"><p class="eyebrow">In this article</p><ol><?php foreach($toc as $h): ?><li><a href="#<?= e(slug($h)) ?>"><?= e($h) ?></a></li><?php endforeach ?></ol></nav><?php endif ?>
-   <div class="side-card disclosure"><p class="eyebrow">Disclosure</p><p class="side-text">This article may contain affiliate links. We may earn a commission if you make a purchase through them, at no extra cost to you.</p><a class="link-arrow" href="/?page=reviews&category=<?= e($r['category_slug']) ?>">More in <?= e($r['category']) ?> <?= ficon('arrow','ic ic-sm') ?></a></div>
+    <a class="btn btn-outline btn-block" href="/?page=compare&category=<?= e($r['category_slug']) ?>">Compare options <?= ficon('arrow','ic ic-sm') ?></a></div><?php endif ?>
+   <?php if(count($toc)>1||$hasCta): ?><nav class="side-card toc" aria-label="In this article"><p class="side-title"><span class="side-ic"><?= ficon('listnum','ic ic-sm') ?></span>In this article</p>
+    <?php if(count($toc)>1): ?><ol><?php foreach($toc as $h): ?><li><a href="#<?= e(slug($h)) ?>" data-toc-link><?= e($h) ?></a></li><?php endforeach ?></ol><?php endif ?>
+    <?php if($hasCta): ?><a class="btn btn-primary btn-block" href="<?= e($r['cta_url']) ?>" target="_blank" rel="sponsored nofollow noopener">Shop on <?= e($r['brand']) ?> <?= ficon('arrow','ic ic-sm') ?></a><?php endif ?></nav><?php endif ?>
+   <?php if($takeaways): ?><div class="side-card"><p class="side-title"><span class="side-ic"><?= ficon('bulb','ic ic-sm') ?></span>Key Takeaways</p><ul class="pc pc-pro"><?php foreach($takeaways as $t): ?><li><?= ficon('check','ic ic-sm') ?><?= e($t) ?></li><?php endforeach ?></ul></div><?php endif ?>
+   <?php if($hasCta): ?><div class="side-card brand-card"><div class="brand-row"><span class="brand-logo tone-<?= $tone ?>"><?= e(mb_strtoupper(mb_substr($r['brand'],0,1))) ?></span><div><p class="side-title">About <?= e($r['brand']) ?></p><?php if($r['brand_about']!==''): ?><p class="side-text"><?= e($r['brand_about']) ?></p><?php endif ?></div></div><a class="btn btn-primary btn-block" href="<?= e($r['cta_url']) ?>" target="_blank" rel="sponsored nofollow noopener">Visit <?= e($r['brand']) ?> <?= ficon('external','ic ic-sm') ?></a></div><?php endif ?>
+   <?php if($related): ?><div class="side-card"><p class="side-title"><span class="side-ic"><?= ficon('related','ic ic-sm') ?></span>Related in <?= e($r['category']) ?></p><ul class="mini-list"><?php foreach($related as $x): ?><li><a href="<?= e(reviewUrl($x)) ?>"><img src="<?= e($x['image']) ?>" alt="" loading="lazy"><span><b><?= e($x['title']) ?></b><small><?= e(date('M j, Y',strtotime($x['published_at']??$x['created_at']))) ?> • <?= readMinutes($x['body']) ?> min read</small></span></a></li><?php endforeach ?></ul></div><?php endif ?>
   </aside>
  </div>
- <section class="wrap section"><div class="section-head"><div><p class="eyebrow">Keep exploring</p><h2 class="section-title">You might also like</h2></div></div><div class="card-grid"><?php foreach(query($join.'WHERE '.live().' AND r.id!=? ORDER BY (r.category_id=?) DESC,r.published_at DESC LIMIT 3',[$r['id'],$r['category_id']]) as $related)reviewCard($related); ?></div></section>
 </article>
+<section class="wrap section"><div class="section-head"><h2 class="section-title">Keep exploring</h2><a class="link-arrow" href="/?page=reviews">View all articles <?= ficon('arrow','ic ic-sm') ?></a></div><div class="card-grid"><?php foreach($more as $x)reviewCard($x); ?></div></section>
 
 <?php elseif($page==='compare'):
  $cat=(string)($_GET['category']??'');$comp=query($join.'WHERE '.live().' AND r.score>0'.($cat!==''?' AND c.slug=?':'').' ORDER BY r.score DESC LIMIT 3',$cat!==''?[$cat]:[]);

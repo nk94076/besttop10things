@@ -22,11 +22,11 @@ try{
   $slug=slug($a['slug']??$a['title']);
   $excerpt=trim((string)($a['excerpt']??''))?:mb_substr(strip_tags($a['body']),0,200);
   $now=date('c');
-  $fields=[$cat,$a['title'],$excerpt,$a['body'],$image,(float)($a['score']??0),(string)($a['pros']??''),(string)($a['cons']??''),(string)($a['verdict']??''),(string)($a['author']??'Editorial team'),(string)($a['status']??'published')];
+  $fields=[$cat,$a['title'],$excerpt,$a['body'],$image,(float)($a['score']??0),(string)($a['pros']??''),(string)($a['cons']??''),(string)($a['verdict']??''),(string)($a['author']??'Editorial team'),(string)($a['status']??'published'),(string)($a['brand']??''),(string)($a['brand_about']??''),(string)($a['cta_url']??'')];
   if($id=query('SELECT id FROM reviews WHERE slug=?',[$slug])[0]['id']??null){
-   run('UPDATE reviews SET category_id=?,title=?,excerpt=?,body=?,image=?,score=?,pros=?,cons=?,verdict=?,author=?,status=?,demo=0,updated_at=? WHERE id=?',[...$fields,$now,$id]);$updated++;
+   run('UPDATE reviews SET category_id=?,title=?,excerpt=?,body=?,image=?,score=?,pros=?,cons=?,verdict=?,author=?,status=?,brand=?,brand_about=?,cta_url=?,demo=0,updated_at=? WHERE id=?',[...$fields,$now,$id]);$updated++;
   }else{
-   run('INSERT INTO reviews(category_id,title,excerpt,body,image,score,pros,cons,verdict,author,status,slug,featured,demo,created_at,updated_at,published_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?)',[...$fields,$slug,$now,$now,now()]);$added++;
+   run('INSERT INTO reviews(category_id,title,excerpt,body,image,score,pros,cons,verdict,author,status,brand,brand_about,cta_url,slug,featured,demo,created_at,updated_at,published_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?)',[...$fields,$slug,$now,$now,now()]);$added++;
   }
  }
  if($hideSamples) run('UPDATE reviews SET status="draft" WHERE demo=1');

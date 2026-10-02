@@ -59,13 +59,16 @@ function savePost(array $in, int $id): int {
  $status=in_array($in['status']??'',['published','draft'],true)?$in['status']:'draft';
  $meta=[trim((string)($in['meta_title']??'')),trim((string)($in['meta_description']??''))];
  if(strlen($meta[0])>200||strlen($meta[1])>500)throw new RuntimeException('SEO title or description is too long.');
- $values=[$category,$title,$slug,trim((string)($in['excerpt']??''))?:autoExcerpt($body),$body,$image,$score,trim((string)($in['pros']??'')),trim((string)($in['cons']??'')),trim((string)($in['verdict']??'')),trim((string)($in['author']??''))?:'Editorial team',$status,empty($in['featured'])?0:1,empty($in['demo'])?0:1,$meta[0],$meta[1],$publishedAt,date('c')];
- $cols='category_id=?,title=?,slug=?,excerpt=?,body=?,image=?,score=?,pros=?,cons=?,verdict=?,author=?,status=?,featured=?,demo=?,meta_title=?,meta_description=?,published_at=?,updated_at=?';
+ $brand=[trim((string)($in['brand']??'')),trim((string)($in['brand_about']??'')),trim((string)($in['cta_url']??''))];
+ if($brand[2]!==''&&!preg_match('~^https://\S+$~i',$brand[2]))throw new RuntimeException('The brand link must start with https://.');
+ if(strlen($brand[0])>80||strlen($brand[1])>500)throw new RuntimeException('Brand name or description is too long.');
+ $values=[$category,$title,$slug,trim((string)($in['excerpt']??''))?:autoExcerpt($body),$body,$image,$score,trim((string)($in['pros']??'')),trim((string)($in['cons']??'')),trim((string)($in['verdict']??'')),trim((string)($in['author']??''))?:'Editorial team',$status,empty($in['featured'])?0:1,empty($in['demo'])?0:1,$meta[0],$meta[1],...$brand,$publishedAt,date('c')];
+ $cols='category_id=?,title=?,slug=?,excerpt=?,body=?,image=?,score=?,pros=?,cons=?,verdict=?,author=?,status=?,featured=?,demo=?,meta_title=?,meta_description=?,brand=?,brand_about=?,cta_url=?,published_at=?,updated_at=?';
  if($id){
   if(!query('SELECT id FROM reviews WHERE id=?',[$id]))throw new RuntimeException('Post not found.');
   run("UPDATE reviews SET $cols WHERE id=?",[...$values,$id]);return $id;
  }
- run('INSERT INTO reviews(category_id,title,slug,excerpt,body,image,score,pros,cons,verdict,author,status,featured,demo,meta_title,meta_description,published_at,updated_at,created_at) VALUES ('.implode(',',array_fill(0,19,'?')).')',[...$values,date('c')]);
+ run('INSERT INTO reviews(category_id,title,slug,excerpt,body,image,score,pros,cons,verdict,author,status,featured,demo,meta_title,meta_description,brand,brand_about,cta_url,published_at,updated_at,created_at) VALUES ('.implode(',',array_fill(0,22,'?')).')',[...$values,date('c')]);
  return (int)db()->lastInsertId();
 }
 
@@ -300,7 +303,7 @@ if(!isset($titles[$view]))$view='dashboard';
 
 <?php elseif($view==='edit'):
  $id=(int)($_GET['id']??0);
- $r=$id?(query('SELECT * FROM reviews WHERE id=?',[$id])[0]??null):['id'=>0,'title'=>'','slug'=>'','category_id'=>'','excerpt'=>'','body'=>'','image'=>'','score'=>'0','pros'=>'','cons'=>'','verdict'=>'','author'=>'Editorial team','status'=>'draft','featured'=>0,'demo'=>0,'meta_title'=>'','meta_description'=>'','published_at'=>''];
+ $r=$id?(query('SELECT * FROM reviews WHERE id=?',[$id])[0]??null):['id'=>0,'title'=>'','slug'=>'','category_id'=>'','excerpt'=>'','body'=>'','image'=>'','score'=>'0','pros'=>'','cons'=>'','verdict'=>'','author'=>'Editorial team','status'=>'draft','featured'=>0,'demo'=>0,'meta_title'=>'','meta_description'=>'','brand'=>'','brand_about'=>'','cta_url'=>'','published_at'=>''];
  if($r&&$error&&($_POST['action']??'')==='save_post')$r=array_merge($r,array_intersect_key($_POST,$r),['featured'=>isset($_POST['featured']),'demo'=>isset($_POST['demo'])]);
  if(!$r): ?><p class="notice notice-error">Post not found.</p><?php else: $state=$id?postState($r):'new'; ?>
  <section class="panel"><?= pageHead('pen',$id?'Edit Post':'Add New Post',$id?'Update the content, settings and SEO of this post.':'Write something new. Save it as a draft or publish when ready.',$id?'<a class="button button-outline" href="/admin.php?view=posts">'.aicon('file').' All Posts</a><a class="button button-primary" href="/admin.php?view=edit">'.aicon('plus').' Add New</a>':'<a class="button button-outline" href="/admin.php?view=posts">'.aicon('file').' All Posts</a>') ?>
@@ -321,9 +324,14 @@ if(!isset($titles[$view]))$view='dashboard';
    <section class="box"><h2 class="box-title"><?= aicon('file','icon title-icon') ?> Excerpt</h2><textarea class="input" name="excerpt" rows="3" maxlength="600"><?= e($r['excerpt']) ?></textarea><p class="hint">Short summary shown on cards and in search results. Leave empty to generate it from the content.</p></section>
    <details class="box" <?= $r['score']>0||$r['pros']!==''?'open':'' ?>><summary class="box-title"><?= aicon('chart','icon title-icon') ?> Review Details <span class="muted">(optional — for product reviews)</span></summary><div class="stack">
     <label>Score out of 10 <input class="input input-sm" name="score" type="number" min="0" max="10" step="0.1" value="<?= e($r['score']) ?>"></label><p class="hint">Leave at 0 for a regular article: no rating badge or verdict box is shown.</p>
-    <label>Pros (one per line)<textarea class="input" name="pros" rows="3"><?= e($r['pros']) ?></textarea></label>
+    <label>Pros / Key takeaways (one per line)<textarea class="input" name="pros" rows="3"><?= e($r['pros']) ?></textarea></label>
     <label>Cons (one per line)<textarea class="input" name="cons" rows="3"><?= e($r['cons']) ?></textarea></label>
     <label>Final verdict<textarea class="input" name="verdict" rows="3"><?= e($r['verdict']) ?></textarea></label></div></details>
+   <section class="box"><h2 class="box-title"><?= aicon('send','icon title-icon') ?> Brand &amp; Call to Action <span class="muted">(optional)</span></h2><div class="stack">
+    <label>Brand name<input class="input" name="brand" value="<?= e($r['brand']) ?>" maxlength="80" placeholder="e.g. Temu"></label>
+    <label>Brand link (affiliate URL)<input class="input" name="cta_url" value="<?= e($r['cta_url']) ?>" placeholder="https://…"></label>
+    <label>About the brand<textarea class="input" name="brand_about" rows="2" maxlength="500"><?= e($r['brand_about']) ?></textarea></label>
+    <p class="hint">Shows a "Shop on …" button and an "About …" box in the article sidebar. Leave empty to hide them.</p></div></section>
    <section class="box"><h2 class="box-title"><?= aicon('search','icon title-icon') ?> SEO</h2><div class="stack">
     <label>SEO title <span class="muted" data-count-for="meta_title"></span><input class="input" name="meta_title" value="<?= e($r['meta_title']) ?>" maxlength="200" placeholder="<?= e($r['title']?:'Defaults to the post title') ?>" data-count="60"></label>
     <label>Meta description <span class="muted" data-count-for="meta_description"></span><textarea class="input" name="meta_description" rows="2" maxlength="500" placeholder="Defaults to the excerpt" data-count="160"><?= e($r['meta_description']) ?></textarea></label>

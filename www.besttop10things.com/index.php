@@ -198,7 +198,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
    <p class="post-dek"><?= e($r['excerpt']) ?></p>
    <div class="byline">
     <span class="avatar-lg"><?= e(strtoupper(substr($r['author'],0,1))) ?></span>
-    <div><b><?= e($r['author']) ?></b><span class="meta"><?= e(date('M j, Y',strtotime($r['published_at']??$r['created_at']))) ?><i>•</i><?= readMinutes($r['body']) ?> min read<?php if(substr($r['updated_at'],0,10)!==substr((string)$r['published_at'],0,10)): ?><i>•</i>Updated <?= e(date('M j, Y',strtotime($r['updated_at']))) ?><?php endif ?></span></div>
+    <div><b><?= e($r['author']) ?></b><span class="meta"><?= e(date('M j, Y',strtotime($r['published_at']??$r['created_at']))) ?><i>•</i><?= readMinutes($r['body']) ?> min read</span></div>
     <div class="share"><button type="button" class="share-btn" data-copy-link="<?= e($shareUrl) ?>" aria-label="Copy link" title="Copy link"><?= ficon('link','ic ic-sm') ?></button><?php foreach($share as $k=>[$label,$url]): ?><a class="share-btn share-<?= $k ?>" href="<?= e($url) ?>" target="_blank" rel="noopener" aria-label="Share on <?= $label ?>" title="Share on <?= $label ?>"><?= ficon($k,'ic ic-sm') ?></a><?php endforeach ?></div>
    </div>
    <img class="post-img" src="<?= e($r['image']) ?>" alt="<?= e($r['title']) ?>">

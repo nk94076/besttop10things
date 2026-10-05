@@ -1,0 +1,11 @@
+{
+    "name": "besttop10things/site",
+    "description": "Private app dependencies (Claude API for the Content Advisor).",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "anthropic-ai/sdk": "^0.54",
+        "guzzlehttp/guzzle": "^7.8"
+    },
+    "config": { "optimize-autoloader": true, "sort-packages": true }
+}

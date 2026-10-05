@@ -18,6 +18,12 @@ if(in_array($_SERVER['REQUEST_METHOD'],['GET','HEAD'],true)&&($rawPath==='/index
 }
 // IndexNow ownership key file
 if(preg_match('~^/([a-f0-9]{32})\.txt$~',$path,$m)&&hash_equals(indexNowKey(),$m[1])){header('Content-Type: text/plain; charset=utf-8');exit($m[1]);}
+// Analytics beacon from app.js.
+if($path==='/t'&&$_SERVER['REQUEST_METHOD']==='POST')collectBeacon();
+// ads.txt (edited in Admin › SEO & Code; stored in the database so a git pull never removes it).
+if($path==='/ads.txt'){header('Content-Type: text/plain; charset=utf-8');exit(rtrim(setting('ads_txt',ADS_TXT_DEFAULT))."\n");}
+// Files added in Admin › File manager › Public files are served at the site root too (e.g. /google123.html).
+if(preg_match('~^/[A-Za-z0-9][A-Za-z0-9._-]{0,120}$~',$path)&&is_file($pub=__DIR__.'/files'.$path)&&publicFileType($pub)){header('Content-Type: '.publicFileType($pub));header('X-Content-Type-Options: nosniff');readfile($pub);exit;}
 // Outgoing link click: log it, then send the visitor on to the stored destination.
 if(preg_match('~^/go/(\d+)$~',$path,$m)){
  $link=query('SELECT * FROM links WHERE id=?',[(int)$m[1]])[0]??null;
@@ -30,7 +36,7 @@ if(preg_match('~^/go/(\d+)$~',$path,$m)){
  run('INSERT INTO clicks(link_id,post_id,placement,anchor,page,source,referrer,utm_source,utm_medium,utm_campaign,landing,visitor,ip,country,device,browser,os,user_agent,is_bot,is_admin,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[
   (int)$link['id'],$postId?:null,substr(preg_replace('/[^a-z0-9-]/','',(string)($_GET['s']??'')),0,30),mb_substr(trim((string)($_GET['a']??'')),0,80),mb_substr($page,0,300),
   (string)($visit['source']??'Direct'),(string)($visit['referrer']??''),(string)($visit['utm_source']??''),(string)($visit['utm_medium']??''),(string)($visit['utm_campaign']??''),(string)($visit['landing']??''),
-  (string)($_COOKIE['btv']??''),clientIp(),strtoupper(substr(preg_replace('/[^A-Za-z]/','',(string)($_SERVER['HTTP_CF_IPCOUNTRY']??'')),0,2)),
+  (string)($_COOKIE['btv']??''),clientIp(),geoCountry(clientIp()),
   $agent['device'],$agent['browser'],$agent['os'],$ua,$agent['is_bot'],isset($_SESSION['admin'])?1:0,now()]);
  $dest=$link['url'];$param=setting('subid_param');
  if(preg_match('/^[A-Za-z0-9_]{1,30}$/',$param))$dest.=(str_contains($dest,'?')?'&':'?').$param.'=bt'.db()->lastInsertId();
@@ -395,7 +401,7 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
   <p>This website stores essential session cookies for secure CMS login and form protection. Public browsing does not require an account.</p>
   <p>If you subscribe to our newsletter, we store your email address so we can send you updates. You can ask us to remove it at any time.</p>
   <p>When you click a link to another website, such as a shop, we record the click so we can understand which articles are useful. This includes the time, the article and link, the page you came from, your IP address, approximate country if available, device and browser type, and a random visitor ID kept in a cookie. We do not record your name or email with clicks.</p>
-  <p>CMS account information and editorial content are stored in the site's database. Failed login attempts are temporarily recorded to limit repeated attempts. The site does not include analytics or advertising trackers by default.</p>
+  <p>CMS account information and editorial content are stored in the site's database. Failed login attempts are temporarily recorded to limit repeated attempts. The site measures visits with its own first-party analytics: the page viewed, the page or website you came from, approximate country (looked up from your IP address), time zone, language, device, browser, screen size, time on page, how far you scrolled and which links you clicked, linked by the same random visitor ID. This data stays on our server, is not sold or shared, IP addresses are deleted after 90 days and the rest after 13 months. We also use Google Analytics, which sets its own cookies.</p>
   <p>Images configured by editors may load from third-party HTTPS hosts. Those hosts receive the network information needed to serve an image. Website server logs may also record requests.</p>
  <?php endif ?>
 </div></section>

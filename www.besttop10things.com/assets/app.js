@@ -98,3 +98,36 @@ if (overlay) {
     if (event.key === '/' && overlay.hidden && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { event.preventDefault(); open(); }
   });
 }
+
+// Site analytics (first-party, see Admin › Analytics): page view, clicks, time on page and scroll depth.
+(() => {
+  if (!navigator.sendBeacon || /bot|crawl|spider|headless/i.test(navigator.userAgent)) return;
+  const rnd = n => [...crypto.getRandomValues(new Uint8Array(n))].map(b => b.toString(16).padStart(2, '0')).join('');
+  const pv = rnd(12);
+  let s = ''; try { s = sessionStorage.getItem('bts') || rnd(8); sessionStorage.setItem('bts', s); } catch { s = rnd(8); }
+  const send = data => navigator.sendBeacon('/t', JSON.stringify({ pv, ...data }));
+  send({ k: 'pv', s, u: location.href, r: document.referrer, t: document.title, w: screen.width + 'x' + screen.height,
+    l: navigator.language || '', z: (Intl.DateTimeFormat().resolvedOptions().timeZone || '') });
+  let maxScroll = 0, visibleMs = 0, shownAt = document.visibilityState === 'visible' ? Date.now() : 0;
+  addEventListener('scroll', () => {
+    const h = document.documentElement.scrollHeight - innerHeight;
+    maxScroll = Math.max(maxScroll, h > 0 ? Math.round(scrollY / h * 100) : 100);
+  }, { passive: true });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      if (shownAt) visibleMs += Date.now() - shownAt;
+      shownAt = 0;
+      send({ k: 'end', sec: Math.round(visibleMs / 1000), sc: maxScroll });
+    } else shownAt = Date.now();
+  });
+  document.addEventListener('click', event => {
+    const el = event.target.closest('a[href], button');
+    if (!el || el.closest('form[action="/admin.php"]')) return;
+    const href = el.tagName === 'A' ? el.href : '';
+    const kind = el.tagName === 'BUTTON' ? 'button' : /\/go\/\d+/.test(href) ? 'affiliate'
+      : el.hasAttribute('download') || /\.(pdf|zip|csv|docx?|xlsx?)(\?|$)/i.test(href) ? 'download'
+      : href && new URL(href, location.href).host !== location.host ? 'outbound' : 'link';
+    const label = (el.getAttribute('aria-label') || el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+    send({ k: 'click', c: kind, h: href.slice(0, 500), x: label });
+  }, { capture: true });
+})();

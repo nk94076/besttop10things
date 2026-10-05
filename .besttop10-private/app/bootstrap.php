@@ -311,6 +311,8 @@ require_once __DIR__.'/gsc.php';
 require_once __DIR__.'/social.php';
 require_once __DIR__.'/ai.php';
 require_once __DIR__.'/advisor.php';
+require_once __DIR__.'/analytics.php';
+require_once __DIR__.'/files.php';
 
 // ---- Authors (E-E-A-T) ----
 // Posts store the author's display name; a matching profile adds a photo, bio and an author page.

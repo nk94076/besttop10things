@@ -6,3 +6,4 @@ www.besttop10things.com/.ssh
 *.sqlite
 *.zip
 .besttop10-private/vendor/
+www.besttop10things.com/files/

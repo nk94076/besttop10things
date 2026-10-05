@@ -519,3 +519,29 @@ nav.tabs{display:inline-flex;margin:4px 0 12px}
 .row-actions-inline{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
 .button-danger{background:var(--danger-50);border-color:#f5c6c6;color:var(--danger);box-shadow:none}
 .button-danger:hover{background:var(--danger);color:#fff}
+.filters .filters-full{grid-column:1/-1;flex-wrap:wrap;justify-content:flex-start}
+/* File manager: folder tree + list */
+.fm{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px;align-items:start}
+.fm-tree{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:10px;position:sticky;top:80px;max-height:calc(100vh - 100px);overflow:auto}
+.fm-tree a{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:8px;color:var(--ink);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fm-tree a:hover{background:var(--bg)}
+.fm-tree a.active{background:var(--brand-50,#e6f6f5);color:var(--brand);font-weight:600}
+.fm-tree .fm-root{font-weight:600;margin-top:4px}
+.fm-tree ul{list-style:none;margin:0 0 0 12px;padding:0 0 0 6px;border-left:1px solid var(--line)}
+.fm-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.fm-bar .crumbs{margin:0}
+.fm-actions,.fm-row-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fm-row-actions{justify-content:flex-end}
+.fm-row-actions form{margin:0}
+.fm-pop{position:relative}
+.fm-pop summary{list-style:none;cursor:pointer}
+.fm-pop summary::-webkit-details-marker{display:none}
+.fm-pop[open]>form{position:absolute;z-index:20;top:calc(100% + 6px);left:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:var(--sh-2,0 8px 24px rgba(0,0,0,.12));white-space:nowrap}
+.fm-pop-right[open]>form{left:auto;right:0}
+.fm-drop{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;margin:0 0 12px;border:2px dashed var(--line-strong,#c9d2da);border-radius:12px;color:var(--muted);font-size:14px}
+.fm-drop.is-over{border-color:var(--brand);background:var(--bg);color:var(--brand)}
+.fm-name{display:inline-flex;align-items:center;gap:10px}
+.fm-name img{width:34px;height:34px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.fm-list td{vertical-align:middle}
+.fm-file-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:center}
+@media (max-width:900px){.fm{grid-template-columns:1fr}.fm-tree{position:static;max-height:none}}

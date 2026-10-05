@@ -377,6 +377,11 @@ if($me&&$view==='clicks'&&isset($_GET['export'])){
  while($c=$q->fetch())fputcsv($out,[$c['created_at'],$c['title']??'',$c['url'],$c['anchor'],$c['placement'],$c['page'],$c['source'],$c['referrer'],$c['utm_source'],$c['utm_medium'],$c['utm_campaign'],$c['landing'],$c['visitor'],$c['ip'],$c['country'],$c['device'],$c['browser'],$c['os'],$c['is_bot']?'yes':'no',$c['is_admin']?'yes':'no',$c['user_agent']]);
  exit;
 }
+if($me&&$view==='files'&&isset($_GET['download'])){
+ try{[, , $abs]=filePath((string)($_GET['root']??''),(string)($_GET['path']??''));}catch(RuntimeException){$abs='';}
+ if($abs===''||!is_file($abs)){http_response_code(404);exit('File not found');}
+ header('Content-Type: application/octet-stream');header('Content-Disposition: attachment; filename="'.preg_replace('/[^A-Za-z0-9._-]/','_',basename($abs)).'"');header('Content-Length: '.filesize($abs));readfile($abs);exit;
+}
 if($me&&$view==='analytics'&&isset($_GET['export'])){
  $from=preg_match('/^\d{4}-\d{2}-\d{2}$/',(string)($_GET['from']??''))?$_GET['from']:date('Y-m-d',strtotime('-29 days'));$to=preg_match('/^\d{4}-\d{2}-\d{2}$/',(string)($_GET['to']??''))?$_GET['to']:date('Y-m-d');
  header('Content-Type: text/csv; charset=utf-8');header('Content-Disposition: attachment; filename="visits-'.$from.'-to-'.$to.'.csv"');
@@ -916,7 +921,7 @@ if(!isset($titles[$view]))$view='dashboard';
   <label>Country<input class="input" name="country" value="<?= e($f['country']) ?>" placeholder="IN, US…" maxlength="2"></label>
   <label class="check-row"><input type="checkbox" name="admins" value="1" <?= $f['admins']?'checked':'' ?>> Include my own visits</label>
   <?php if($f['visitor']!==''): ?><input type="hidden" name="visitor" value="<?= e($f['visitor']) ?>"><?php endif ?>
-  <div class="filters-actions"><button class="button button-primary"><?= aicon('search') ?> Apply</button><a class="button button-outline" href="/admin.php?view=analytics">Reset</a>
+  <div class="filters-actions filters-full"><button class="button button-primary"><?= aicon('search') ?> Apply</button><a class="button button-outline" href="/admin.php?view=analytics">Reset</a>
    <?php foreach(['Today'=>[0,0],'7 days'=>[6,0],'30 days'=>[29,0],'90 days'=>[89,0],'Year'=>[364,0]] as $l=>[$a]): ?><a class="button button-outline button-sm" href="<?= e($aurl(['from'=>date('Y-m-d',strtotime("-$a days")),'to'=>date('Y-m-d'),'p'=>null])) ?>"><?= $l ?></a><?php endforeach ?></div>
  </form>
  <?php if($f['visitor']!==''): ?><p class="notice">Showing one visitor <code><?= e(substr($f['visitor'],0,8)) ?></code>. <a href="<?= e($aurl(['visitor'=>null])) ?>">Show everyone</a></p><?php endif ?>
@@ -982,49 +987,76 @@ if(!isset($titles[$view]))$view='dashboard';
  $roots=fileRoots();$root=isset($roots[$_GET['root']??''])?$_GET['root']:'public';$rel=(string)($_GET['path']??'');
  try{[, , $abs,$rel]=filePath($root,$rel);$isFile=is_file($abs);if(!$isFile&&!is_dir($abs))throw new RuntimeException('Not found.');$fileErr='';}catch(RuntimeException $ex){$fileErr=$ex->getMessage();$rel='';[, , $abs]=filePath($root,'');$isFile=false;}
  $dirRel=$isFile?(dirname($rel)==='.'?'':dirname($rel)):$rel;$writable=$roots[$root][2];
- $furl=fn(array $o)=>'/admin.php?'.http_build_query(array_filter(['view'=>'files','root'=>$root,'path'=>$dirRel]+$o,fn($v)=>$v!==null&&$v!==''));
+ $furl=fn(array $o)=>'/admin.php?'.http_build_query(array_filter(array_merge(['view'=>'files','root'=>$root,'path'=>$dirRel],$o),fn($v)=>$v!==null&&$v!==''));
  $size=fn(int $b)=>$b>=1048576?round($b/1048576,1).' MB':($b>=1024?round($b/1024).' KB':$b.' B');
+ $hidden=fn(string $action,string $path)=>csrfField().'<input type="hidden" name="action" value="'.$action.'"><input type="hidden" name="root" value="'.e($root).'"><input type="hidden" name="path" value="'.e($path).'">';
+ $isImg=fn(string $n)=>str_starts_with((string)(FILE_TYPES[fileExt($n)]??''),'image/');
+ // Folder tree: every root, and the folders along the open path (plus their sub-folders).
+ $tree=function(string $r,string $base,int $depth) use(&$tree,$root,$dirRel){
+  if($depth>6)return '';try{$items=array_filter(fileList($r,$base),fn($i)=>$i['dir']);}catch(RuntimeException){return '';}
+  if(!$items)return '';$h='<ul>';
+  foreach($items as $i){$open=$r===$root&&($dirRel===$i['rel']||str_starts_with($dirRel,$i['rel'].'/'));
+   $h.='<li><a class="'.($r===$root&&$dirRel===$i['rel']?'active':'').'" href="/admin.php?'.e(http_build_query(['view'=>'files','root'=>$r,'path'=>$i['rel']])).'">'.aicon('folder','icon icon-sm').' '.e($i['name']).'</a>'.($open?$tree($r,$i['rel'],$depth+1):'').'</li>';}
+  return $h.'</ul>';
+ };
 ?>
- <section class="panel"><?= pageHead('folder','File manager','See your website files, upload new ones and edit text files.') ?>
- <nav class="tabs" aria-label="Folders"><?php foreach($roots as $k=>[$label]): ?><a class="<?= $k===$root?'active':'' ?>" href="/admin.php?view=files&amp;root=<?= $k ?>"><?= e($label) ?></a><?php endforeach ?></nav>
- <p class="hint"><?= match($root){
-  'public'=>'<b>Safe from git pull.</b> Files here are yours: they are not part of the code, so updates never touch them. Each file is online at <code>/files/name</code> and also at <code>/name</code> (good for Google/Bing/Pinterest verification files).',
-  'uploads'=>'<b>Safe from git pull.</b> Images from the media library and post editor.',
-  default=>'<b>View only.</b> This is the website code from GitHub. Editing it here would be overwritten (or would block) the next <code>git pull</code>, so ask for code changes instead. API keys and databases are hidden.'} ?></p>
+ <section class="panel"><?= pageHead('folder','File manager','Browse your website files, open folders, upload, edit, download, rename and delete.') ?>
  <?php if($fileErr): ?><p class="notice notice-error"><?= e($fileErr) ?></p><?php endif ?>
- <nav class="crumbs" aria-label="Path"><a href="<?= e($furl(['path'=>null])) ?>"><?= e($roots[$root][0]) ?></a><?php $acc='';foreach(array_filter(explode('/',$rel),'strlen') as $part): $acc=ltrim("$acc/$part",'/'); ?> / <a href="<?= e($furl(['path'=>$acc])) ?>"><?= e($part) ?></a><?php endforeach ?></nav>
- <?php if($isFile): $ext=fileExt($rel);$url=fileUrl($root,$rel);$text=in_array($ext,TEXT_TYPES,true)||($root==='code'&&in_array($ext,['php','htaccess','lock','yml','yaml','sh','ini','conf',''],true)); ?>
-  <section class="box"><h2 class="box-title"><?= aicon('file','icon title-icon') ?> <?= e(basename($rel)) ?> <span class="muted"><?= $size((int)filesize($abs)) ?> · changed <?= e(date('M j, Y g:i a',(int)filemtime($abs))) ?></span></h2>
-   <?php if($url): ?><p><a href="<?= e($url) ?>" target="_blank" rel="noopener"><?= e(siteBase().$url) ?></a></p><?php endif ?>
-   <?php if($text&&filesize($abs)<=2*1024*1024): ?>
-    <form method="post" class="stack"><?= csrfField() ?><input type="hidden" name="action" value="file_save"><input type="hidden" name="root" value="<?= e($root) ?>"><input type="hidden" name="path" value="<?= e($rel) ?>">
-     <textarea class="input code-input file-editor" name="content" rows="24" spellcheck="false" <?= $writable?'':'readonly' ?>><?= e((string)file_get_contents($abs)) ?></textarea>
-     <?php if($writable): ?><div><button class="button button-primary"><?= aicon('send') ?> Save file</button></div><?php endif ?>
-    </form>
-   <?php elseif(str_starts_with((string)(FILE_TYPES[$ext]??''),'image/')&&$url): ?><img class="file-preview" src="<?= e($url) ?>" alt="">
-   <?php else: ?><p class="muted">This file cannot be shown here<?= $url?', open it with the link above':'' ?>.</p><?php endif ?>
-   <?php if($writable): ?><div class="row-actions-inline">
-    <form method="post" class="inline-form"><?= csrfField() ?><input type="hidden" name="action" value="file_rename"><input type="hidden" name="root" value="<?= e($root) ?>"><input type="hidden" name="path" value="<?= e($rel) ?>"><input class="input input-sm" name="to" value="<?= e(basename($rel)) ?>" aria-label="New name"><button class="button button-outline button-sm">Rename</button></form>
-    <form method="post" class="inline-form" data-confirm="Delete <?= e(basename($rel)) ?>? This cannot be undone."><?= csrfField() ?><input type="hidden" name="action" value="file_delete"><input type="hidden" name="root" value="<?= e($root) ?>"><input type="hidden" name="path" value="<?= e($rel) ?>"><button class="button button-danger button-sm"><?= aicon('trash') ?> Delete</button></form>
-   </div><?php endif ?>
-  </section>
- <?php else: $items=$fileErr?[]:fileList($root,$rel); ?>
-  <?php if($writable): ?><div class="breakdowns">
-   <form method="post" enctype="multipart/form-data" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="file_upload"><input type="hidden" name="root" value="<?= e($root) ?>"><input type="hidden" name="path" value="<?= e($rel) ?>">
-    <h2 class="box-title"><?= aicon('plus','icon title-icon') ?> Upload files</h2><input class="input" type="file" name="files[]" multiple required>
-    <p class="hint">Allowed: <?= e(implode(', ',array_keys(FILE_TYPES))) ?>. Max <?= e(ini_get('upload_max_filesize')) ?> per file.</p><div><button class="button button-primary">Upload</button></div></form>
-   <div class="box stack"><h2 class="box-title"><?= aicon('pen','icon title-icon') ?> Create</h2>
-    <form method="post" class="inline-form"><?= csrfField() ?><input type="hidden" name="action" value="file_save"><input type="hidden" name="root" value="<?= e($root) ?>"><input type="hidden" name="path" value="<?= e($rel) ?>"><input type="hidden" name="content" value=""><input class="input input-sm" name="new_name" placeholder="new-file.txt" required><button class="button button-outline button-sm">New text file</button></form>
-    <form method="post" class="inline-form"><?= csrfField() ?><input type="hidden" name="action" value="file_mkdir"><input type="hidden" name="root" value="<?= e($root) ?>"><input type="hidden" name="path" value="<?= e($rel) ?>"><input class="input input-sm" name="name" placeholder="folder-name" required><button class="button button-outline button-sm">New folder</button></form>
+ <div class="fm">
+  <aside class="fm-tree" aria-label="Folders">
+   <?php foreach($roots as $k=>[$label,,$w]): ?>
+    <a class="fm-root <?= $k===$root&&$dirRel===''?'active':'' ?>" href="/admin.php?view=files&amp;root=<?= $k ?>"><?= aicon($k==='code'?'code':($k==='uploads'?'image':'folder')) ?> <?= e($label) ?><?= $w?'':' <span class="tag">view only</span>' ?></a>
+    <?php if($k===$root)echo $tree($k,'',0); ?>
+   <?php endforeach ?>
+  </aside>
+  <div class="fm-main">
+   <div class="fm-bar">
+    <nav class="crumbs" aria-label="Path"><a href="<?= e($furl(['path'=>null])) ?>"><?= e($roots[$root][0]) ?></a><?php $acc='';foreach(array_filter(explode('/',$rel),'strlen') as $part): $acc=ltrim("$acc/$part",'/'); ?> <span class="muted">›</span> <a href="<?= e($furl(['path'=>$acc])) ?>"><?= e($part) ?></a><?php endforeach ?></nav>
+    <?php if($writable&&!$isFile): ?><div class="fm-actions">
+     <form method="post" enctype="multipart/form-data" data-autosubmit><?= $hidden('file_upload',$rel) ?><label class="button button-primary button-sm"><?= aicon('plus') ?> Upload<input type="file" name="files[]" multiple hidden></label></form>
+     <details class="fm-pop"><summary class="button button-outline button-sm"><?= aicon('folder') ?> New folder</summary><form method="post" class="inline-form"><?= $hidden('file_mkdir',$rel) ?><input class="input input-sm" name="name" placeholder="folder-name" required><button class="button button-primary button-sm">Create</button></form></details>
+     <details class="fm-pop"><summary class="button button-outline button-sm"><?= aicon('file') ?> New file</summary><form method="post" class="inline-form"><?= $hidden('file_save',$rel) ?><input type="hidden" name="content" value=""><input class="input input-sm" name="new_name" placeholder="new-file.txt" required><button class="button button-primary button-sm">Create</button></form></details>
+    </div><?php endif ?>
    </div>
-  </div><?php endif ?>
-  <div class="table-wrap"><table class="list-table"><thead><tr><th>Name</th><th class="num">Size</th><th>Changed</th></tr></thead><tbody>
-   <?php if($rel!==''): ?><tr><td colspan="3"><a href="<?= e($furl(['path'=>dirname($rel)==='.'?null:dirname($rel)])) ?>">← Up one folder</a></td></tr><?php endif ?>
-   <?php foreach($items as $it): ?><tr><td><a class="row-title" href="<?= e($furl(['path'=>$it['rel']])) ?>"><?= aicon($it['dir']?'folder':'file','icon icon-sm') ?> <?= e($it['name']) ?><?= $it['dir']?'/':'' ?></a></td><td class="num"><?= $it['dir']?'—':$size((int)$it['size']) ?></td><td class="nowrap muted"><?= e(date('M j, Y g:i a',(int)$it['time'])) ?></td></tr><?php endforeach ?>
-   <?php if(!$items): ?><tr><td colspan="3" class="empty muted">This folder is empty.</td></tr><?php endif ?>
-  </tbody></table></div>
+   <p class="hint"><?= match($root){
+    'public'=>'<b>Safe from git pull.</b> Your own files. Each one is online at <code>/files/name</code> and at <code>/name</code> (verification files etc.).',
+    'uploads'=>'<b>Safe from git pull.</b> Images from the media library and post editor.',
+    default=>'<b>View only.</b> Website code from GitHub: changes here would be undone by the next <code>git pull</code>, so ask for code changes instead. Keys and databases are hidden.'} ?></p>
+ <?php if($isFile): $ext=fileExt($rel);$url=fileUrl($root,$rel);$text=in_array($ext,TEXT_TYPES,true)||($root==='code'&&in_array($ext,['php','htaccess','lock','yml','yaml','sh','ini','conf','gitignore',''],true)); ?>
+   <section class="box fm-file"><div class="fm-file-head"><h2 class="box-title"><?= aicon('file','icon title-icon') ?> <?= e(basename($rel)) ?> <span class="muted"><?= $size((int)filesize($abs)) ?> · changed <?= e(date('M j, Y g:i a',(int)filemtime($abs))) ?></span></h2>
+    <div class="fm-actions"><a class="button button-outline button-sm" href="<?= e($furl(['path'=>$rel,'download'=>1])) ?>">Download</a><?php if($url): ?><a class="button button-outline button-sm" href="<?= e($url) ?>" target="_blank" rel="noopener">Open on site</a><?php endif ?><a class="button button-outline button-sm" href="<?= e($furl([])) ?>">← Back to folder</a></div></div>
+    <?php if($text&&filesize($abs)<=2*1024*1024): ?>
+     <form method="post" class="stack"><?= $hidden('file_save',$rel) ?>
+      <textarea class="input code-input file-editor" name="content" rows="26" spellcheck="false" <?= $writable?'':'readonly' ?>><?= e((string)file_get_contents($abs)) ?></textarea>
+      <?php if($writable): ?><div><button class="button button-primary"><?= aicon('send') ?> Save file</button></div><?php endif ?>
+     </form>
+    <?php elseif($isImg($rel)&&$url): ?><img class="file-preview" src="<?= e($url) ?>" alt="">
+    <?php else: ?><p class="muted">No preview for this file type. Use Download.</p><?php endif ?>
+   </section>
+ <?php else: $items=$fileErr?[]:fileList($root,$rel); ?>
+   <form method="post" enctype="multipart/form-data" class="fm-drop" data-drop <?= $writable?'':'hidden' ?>><?= $hidden('file_upload',$rel) ?><input type="file" name="files[]" multiple hidden><?= aicon('plus') ?> Drag files here to upload them into this folder</form>
+   <div class="table-wrap"><table class="list-table fm-list"><thead><tr><th>Name</th><th class="num">Size</th><th>Changed</th><th class="num">Actions</th></tr></thead><tbody>
+    <?php if($rel!==''): ?><tr><td colspan="4"><a class="row-title" href="<?= e($furl(['path'=>dirname($rel)==='.'?null:dirname($rel)])) ?>"><?= aicon('folder','icon icon-sm') ?> ..</a> <span class="muted">up one folder</span></td></tr><?php endif ?>
+    <?php foreach($items as $it): $open=$furl(['path'=>$it['rel']]);$u=$it['dir']?null:fileUrl($root,$it['rel']); ?><tr>
+     <td><a class="row-title fm-name" href="<?= e($open) ?>"><?php if(!$it['dir']&&$u&&$isImg($it['name'])): ?><img src="<?= e($u) ?>" alt="" loading="lazy"><?php else: ?><?= aicon($it['dir']?'folder':'file','icon') ?><?php endif ?><span><?= e($it['name']) ?></span></a></td>
+     <td class="num muted"><?= $it['dir']?'—':$size((int)$it['size']) ?></td>
+     <td class="nowrap muted"><?= e(date('M j, Y g:i a',(int)$it['time'])) ?></td>
+     <td class="num"><div class="fm-row-actions">
+      <a class="button button-outline button-sm" href="<?= e($open) ?>"><?= $it['dir']?'Open':($writable&&in_array(fileExt($it['name']),TEXT_TYPES,true)?'Edit':'View') ?></a>
+      <?php if(!$it['dir']): ?><a class="button button-outline button-sm" href="<?= e($furl(['path'=>$it['rel'],'download'=>1])) ?>">Download</a><?php endif ?>
+      <?php if($writable): ?>
+       <details class="fm-pop fm-pop-right"><summary class="button button-outline button-sm">Rename</summary><form method="post" class="inline-form"><?= $hidden('file_rename',$it['rel']) ?><input class="input input-sm" name="to" value="<?= e($it['name']) ?>" aria-label="New name"><button class="button button-primary button-sm">Save</button></form></details>
+       <form method="post" data-confirm="Delete <?= e($it['name']) ?>? This cannot be undone."><?= $hidden('file_delete',$it['rel']) ?><button class="button button-danger button-sm" title="Delete"><?= aicon('trash') ?></button></form>
+      <?php endif ?>
+     </div></td>
+    </tr><?php endforeach ?>
+    <?php if(!$items): ?><tr><td colspan="4" class="empty muted">This folder is empty.<?= $writable?' Upload files or create a new one above.':'' ?></td></tr><?php endif ?>
+   </tbody></table></div>
  <?php endif ?>
+  </div>
+ </div>
  </section>
+
 <?php elseif($view==='users'): ?>
  <section class="panel"><?= pageHead('users','Users','People who can sign in to this workspace.') ?>
  <div class="two-col">

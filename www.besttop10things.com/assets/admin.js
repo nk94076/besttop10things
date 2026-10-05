@@ -245,3 +245,14 @@ if (appearance) {
 
 // Clicks: size the breakdown bars (inline styles are blocked by the CSP, CSSOM is not)
 document.querySelectorAll('[data-w]').forEach(bar => { bar.style.width = Math.max(2, Number(bar.dataset.w)) + '%'; });
+
+// File manager: upload as soon as files are chosen, or dropped on the drop zone
+document.querySelectorAll('form[data-autosubmit] input[type=file]').forEach(input => input.addEventListener('change', () => { if (input.files.length) input.form.submit(); }));
+document.querySelectorAll('form[data-drop]').forEach(zone => {
+  const input = zone.querySelector('input[type=file]');
+  ['dragenter', 'dragover'].forEach(t => zone.addEventListener(t, e => { e.preventDefault(); zone.classList.add('is-over'); }));
+  ['dragleave', 'drop'].forEach(t => zone.addEventListener(t, () => zone.classList.remove('is-over')));
+  zone.addEventListener('drop', e => { e.preventDefault(); if (!e.dataTransfer.files.length) return; input.files = e.dataTransfer.files; zone.submit(); });
+  zone.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { if (input.files.length) zone.submit(); });
+});

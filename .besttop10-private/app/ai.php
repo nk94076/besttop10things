@@ -44,7 +44,7 @@ function geminiJson(string $prompt, array $schema, int $maxTokens): array {
   $r=json_decode($raw,true);
   if(in_array($code,[404,429,500,503],true)){$last=$code===429?'Gemini free-tier limit reached for now. It resets automatically; queued work is retried by the hourly cron.':'Gemini is busy right now ('.($r['error']['message']??"HTTP $code").'). Try again in a few minutes.';continue;}
   if($code<200||$code>=300)throw new RuntimeException('Gemini API: '.($r['error']['message']??($err?:"HTTP $code")));
-  $last='';break;
+  $last='';$GLOBALS['aiModelUsed']=$model;break;
  }
  if($last!=='')throw new RuntimeException($last);
  if(!empty($r['promptFeedback']['blockReason']))throw new RuntimeException('Gemini declined this request ('.$r['promptFeedback']['blockReason'].').');
@@ -116,4 +116,12 @@ function aiJson(string $prompt, array $schema, int $maxTokens=16000, string $eff
 // Strict object schema helper: every property required, no extras (what structured outputs expect).
 function aiObject(array $props, ?string $title=null): array {
  return array_filter(['title'=>$title,'type'=>'object','properties'=>$props,'required'=>array_keys($props),'additionalProperties'=>false],fn($v)=>$v!==null);
+}
+
+// Tiny request to prove the key and provider work. Returns a human-readable status.
+function aiTest(): string {
+ $t=microtime(true);
+ $r=aiJson('Reply with ok = true.',aiObject(['ok'=>['type'=>'boolean']],'test'),200,'low');
+ if(empty($r['ok']))throw new RuntimeException('The AI answered, but not as expected. Try again.');
+ return (aiProvider()==='gemini'?'Google Gemini ('.($GLOBALS['aiModelUsed']??geminiModel()).')':'Claude').' answered in '.round(microtime(true)-$t,1).'s.';
 }

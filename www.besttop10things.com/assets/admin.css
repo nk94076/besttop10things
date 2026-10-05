@@ -498,3 +498,4 @@ body.cms{background:var(--navy)}
 .fix-box .check-row{align-items:flex-start}.fix-preview{font-size:14px;margin-top:6px}
 .chip-amber{background:#fdf0d5;color:#8a5a00}
 .site-note{border-left:4px solid #e0a100;margin-bottom:18px}.merge-form{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.merge-form .input{max-width:420px}
+.ai-fs{border:1px solid var(--line);border-radius:12px;padding:12px 14px}.ai-fs legend{padding:0 6px;font-weight:700}

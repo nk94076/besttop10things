@@ -497,3 +497,4 @@ body.cms{background:var(--navy)}
 .fix-box{margin-top:14px;padding:14px;border:1px dashed var(--line-strong,#cbd5e1);border-radius:12px;background:var(--bg-soft,#f6f8fa);display:grid;gap:10px}
 .fix-box .check-row{align-items:flex-start}.fix-preview{font-size:14px;margin-top:6px}
 .chip-amber{background:#fdf0d5;color:#8a5a00}
+.site-note{border-left:4px solid #e0a100;margin-bottom:18px}.merge-form{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.merge-form .input{max-width:420px}

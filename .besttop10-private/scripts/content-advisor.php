@@ -5,9 +5,15 @@ declare(strict_types=1);
 // - weekly: refreshes keyword ideas; if enabled in Admin › Content Advisor, prepares AI fixes for the
 //   3 posts with the biggest problems (optionally applying them automatically), and (optional) rewrites
 //   SEO titles of low-CTR pages automatically
+// - daily: trims old analytics rows; monthly: refreshes the visitor-country database
 if(PHP_SAPI!=='cli'){http_response_code(404);exit;}
 require __DIR__.'/../app/bootstrap.php';
 foreach(processAiQueue(5) as $l)echo date('Y-m-d H:i ')."$l\n";
+if(setting('analytics_pruned')!==date('Y-m-d')){analyticsPrune();run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['analytics_pruned',date('Y-m-d')]);}
+if(!is_file(GEOIP_DB)||time()-filemtime(GEOIP_DB)>31*86400){
+ if(setting('geoip_tried')!==date('Y-m-d')){run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['geoip_tried',date('Y-m-d')]);
+  try{echo date('Y-m-d H:i ').'Country database updated: '.geoipUpdate()." ranges\n";}catch(Throwable $e){echo date('Y-m-d H:i ').'Country database: '.$e->getMessage()."\n";}}
+}
 $last=strtotime(setting('advisor_weekly_run')?:'2000-01-01');
 if(time()-$last<7*86400)exit;
 run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['advisor_weekly_run',date('c')]);

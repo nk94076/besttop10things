@@ -324,7 +324,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   }
   if($action==='seo_settings'){
    $vals=[];
-   foreach(['google_verification'=>200,'bing_verification'=>200,'yandex_verification'=>200,'pinterest_verification'=>200,'ga_id'=>30,'org_about'=>600,'org_email'=>200,'org_same_as'=>2000,'llms_intro'=>1500,'code_head'=>20000,'code_body'=>20000,'code_footer'=>20000,'code_domains'=>1000] as $k=>$max){$v=trim(str_replace("\r",'',(string)($_POST[$k]??'')));if(strlen($v)>$max)throw new RuntimeException('A field is too long.');$vals[$k]=$v;}
+   foreach(['google_verification'=>200,'bing_verification'=>200,'yandex_verification'=>200,'pinterest_verification'=>200,'ga_id'=>30,'org_about'=>600,'org_email'=>200,'org_same_as'=>2000,'llms_intro'=>1500,'code_head'=>20000,'code_body'=>20000,'code_footer'=>20000,'code_domains'=>1000,'ads_txt'=>10000] as $k=>$max){$v=trim(str_replace("\r",'',(string)($_POST[$k]??'')));if(strlen($v)>$max)throw new RuntimeException('A field is too long.');$vals[$k]=$v;}
    foreach(['google_verification','bing_verification','yandex_verification','pinterest_verification'] as $k){if(preg_match('/content=["\']([^"\']+)["\']/i',$vals[$k],$m))$vals[$k]=$m[1];if($vals[$k]!==''&&!preg_match('/^[A-Za-z0-9_\-=.:]{4,200}$/',$vals[$k]))throw new RuntimeException('Paste only the verification code (the content="…" value).');}
    if($vals['ga_id']!==''&&!preg_match('/^G-[A-Z0-9]{4,20}$/',$vals['ga_id']))throw new RuntimeException('The Google Analytics ID looks like G-XXXXXXXXXX.');
    if($vals['org_email']!==''&&!filter_var($vals['org_email'],FILTER_VALIDATE_EMAIL))throw new RuntimeException('Enter a valid contact email.');
@@ -338,6 +338,20 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    foreach(query('SELECT r.slug FROM reviews r WHERE '.live()) as $x)$urls[]=reviewUrl($x);
    flash(indexNowPing($urls)?count($urls).' URLs sent to IndexNow (Bing, ChatGPT search, Yandex…).':'IndexNow did not accept the request. Try again later.','/admin.php?view=seo');
   }
+  if(in_array($action,['file_upload','file_save','file_mkdir','file_delete','file_rename'],true)){
+   $root=(string)($_POST['root']??'public');$rel=(string)($_POST['path']??'');$dir=$action==='file_save'||$action==='file_delete'||$action==='file_rename'?dirname($rel):$rel;$dir=$dir==='.'?'':$dir;
+   $back='/admin.php?'.http_build_query(['view'=>'files','root'=>$root,'path'=>$dir]);
+   if($action==='file_upload'){$n=0;$files=$_FILES['files']??[];foreach((array)($files['name']??[]) as $i=>$name){fileUpload($root,$rel,['name'=>$name,'tmp_name'=>$files['tmp_name'][$i],'error'=>$files['error'][$i],'size'=>$files['size'][$i]]);$n++;}flash($n?"$n file".($n===1?'':'s').' uploaded.':'Choose a file first.',$back);}
+   if($action==='file_save'){$new=trim((string)($_POST['new_name']??''));if($new!==''){$rel=ltrim($rel.'/'.cleanFileName($new),'/');$dir=(string)($_POST['path']??'');if(file_exists(filePath($root,$rel)[2]))throw new RuntimeException('A file with this name already exists.');}fileSave($root,$rel,(string)($_POST['content']??''));flash('Saved '.basename($rel).'.','/admin.php?'.http_build_query(['view'=>'files','root'=>$root,'path'=>$rel,'edit'=>1]));}
+   if($action==='file_mkdir'){fileMkdir($root,$rel,(string)($_POST['name']??''));flash('Folder created.',$back);}
+   if($action==='file_delete'){fileDelete($root,$rel);flash(basename($rel).' deleted.',$back);}
+   if($action==='file_rename'){fileRename($root,$rel,(string)($_POST['to']??''));flash('Renamed.',$back);}
+  }
+  if($action==='analytics_settings'){
+   run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['analytics_off',isset($_POST['analytics_off'])?'1':'0']);
+   flash('Analytics settings saved.','/admin.php?view=analytics');
+  }
+  if($action==='geoip_update'){@set_time_limit(300);$n=geoipUpdate();flash('Country database updated ('.number_format($n).' IP ranges).','/admin.php?view=analytics');}
   if($action==='tracking'){
    $param=trim((string)($_POST['subid_param']??''));
    if($param!==''&&!preg_match('/^[A-Za-z0-9_]{1,30}$/',$param))throw new RuntimeException('The parameter name can only use letters, numbers and _ (e.g. subId1).');
@@ -363,8 +377,16 @@ if($me&&$view==='clicks'&&isset($_GET['export'])){
  while($c=$q->fetch())fputcsv($out,[$c['created_at'],$c['title']??'',$c['url'],$c['anchor'],$c['placement'],$c['page'],$c['source'],$c['referrer'],$c['utm_source'],$c['utm_medium'],$c['utm_campaign'],$c['landing'],$c['visitor'],$c['ip'],$c['country'],$c['device'],$c['browser'],$c['os'],$c['is_bot']?'yes':'no',$c['is_admin']?'yes':'no',$c['user_agent']]);
  exit;
 }
+if($me&&$view==='analytics'&&isset($_GET['export'])){
+ $from=preg_match('/^\d{4}-\d{2}-\d{2}$/',(string)($_GET['from']??''))?$_GET['from']:date('Y-m-d',strtotime('-29 days'));$to=preg_match('/^\d{4}-\d{2}-\d{2}$/',(string)($_GET['to']??''))?$_GET['to']:date('Y-m-d');
+ header('Content-Type: text/csv; charset=utf-8');header('Content-Disposition: attachment; filename="visits-'.$from.'-to-'.$to.'.csv"');
+ $out=fopen('php://output','w');fputcsv($out,['Time','Page','Title','Source','Referrer','UTM source','UTM medium','UTM campaign','Country','Time zone','Language','Device','Browser','OS','Screen','Visitor','Visit','New visitor','Seconds','Scroll %','IP','Admin']);
+ $q=adb()->prepare('SELECT * FROM hits WHERE day>=? AND day<=?'.(empty($_GET['admins'])?' AND is_admin=0':'').' ORDER BY id');$q->execute([$from,$to]);
+ while($h=$q->fetch())fputcsv($out,[$h['ts'],$h['path'],$h['title'],$h['source'],$h['referrer'],$h['utm_source'],$h['utm_medium'],$h['utm_campaign'],$h['country'],$h['tz'],$h['lang'],$h['device'],$h['browser'],$h['os'],$h['screen'],$h['visitor'],$h['session'],$h['is_new']?'yes':'no',$h['seconds'],$h['scroll'],$h['ip'],$h['is_admin']?'yes':'no']);
+ exit;
+}
 if($logged&&!$me){unset($_SESSION['admin']);$logged=false;}
-$titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','clicks'=>'Clicks','search'=>'Search Console','advisor'=>'Content Advisor','authors'=>'Authors','appearance'=>'Appearance','seo'=>'SEO & Code','users'=>'Users','settings'=>'Settings'];
+$titles=['dashboard'=>'Dashboard','posts'=>'Posts','edit'=>'Edit Post','media'=>'Media Library','categories'=>'Categories','analytics'=>'Analytics','clicks'=>'Clicks','files'=>'File manager','search'=>'Search Console','advisor'=>'Content Advisor','authors'=>'Authors','appearance'=>'Appearance','seo'=>'SEO & Code','users'=>'Users','settings'=>'Settings'];
 if(!isset($titles[$view]))$view='dashboard';
 ?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= e($logged?$titles[$view]:'Log in') ?> ‹ <?= e(setting('site_name')) ?></title><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="<?= e(asset('/assets/admin.css')) ?>"><script src="<?= e(asset('/assets/admin.js')) ?>" defer></script></head>
 <body class="<?= $logged?'cms':'cms-login' ?>">
@@ -388,7 +410,7 @@ if(!isset($titles[$view]))$view='dashboard';
  $now=now();
  $count=fn(string $where)=>(int)db()->query("SELECT COUNT(*) FROM reviews r WHERE $where")->fetchColumn();
  $counts=['all'=>$count("r.status!='trash'"),'published'=>$count(live()),'scheduled'=>$count("r.status='published' AND r.published_at>'$now'"),'draft'=>$count("r.status='draft'"),'trash'=>$count("r.status='trash'")];
- $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'clicks'=>['Clicks','chart'],'search'=>['Search Console','search'],'advisor'=>['Content Advisor','trophy'],'authors'=>['Authors','users'],'appearance'=>['Appearance','image'],'seo'=>['SEO &amp; Code','code'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
+ $nav=['dashboard'=>['Dashboard','home'],'posts'=>['Posts','file'],'media'=>['Media','image'],'categories'=>['Categories','folder'],'analytics'=>['Analytics','chart'],'clicks'=>['Clicks','send'],'search'=>['Search Console','search'],'advisor'=>['Content Advisor','trophy'],'authors'=>['Authors','users'],'appearance'=>['Appearance','image'],'seo'=>['SEO &amp; Code','code'],'files'=>['File manager','folder'],'users'=>['Users','users'],'settings'=>['Settings','gear']];
 ?>
 <header class="cms-top">
  <button type="button" class="cms-menu" data-side-toggle aria-label="Toggle menu"><?= aicon('menu') ?></button>
@@ -857,6 +879,152 @@ if(!isset($titles[$view]))$view='dashboard';
   <div><button class="button button-primary">Save</button></div></form>
  </section>
 
+<?php elseif($view==='analytics'):
+ $f=['from'=>(string)($_GET['from']??''),'to'=>(string)($_GET['to']??''),'path'=>mb_substr((string)($_GET['path']??''),0,300),'source'=>mb_substr((string)($_GET['source']??''),0,100),'country'=>strtoupper(substr((string)($_GET['country']??''),0,2)),'device'=>(string)($_GET['device']??''),'visitor'=>preg_replace('/[^a-f0-9]/','',(string)($_GET['visitor']??'')),'admins'=>!empty($_GET['admins'])];
+ foreach(['from','to'] as $k)if(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$f[$k]))$f[$k]=$k==='from'?date('Y-m-d',strtotime('-29 days')):date('Y-m-d');
+ $aurl=fn(array $o=[])=>'/admin.php?'.http_build_query(array_filter(['view'=>'analytics']+array_merge($f,$o),fn($v)=>$v!==null&&$v!==''&&$v!==false));
+ $w=['h.day>=?','h.day<=?'];$p=[$f['from'],$f['to']];
+ if(!$f['admins'])$w[]='h.is_admin=0';
+ foreach(['path'=>'h.path','source'=>'h.source','country'=>'h.country','device'=>'h.device','visitor'=>'h.visitor'] as $k=>$col)if($f[$k]!==''){$w[]="$col=?";$p[]=$f[$k];}
+ $where=implode(' AND ',$w);$A=fn(string $sql)=>aquery($sql,$p);
+ $tot=$A("SELECT COUNT(*) pv,COUNT(DISTINCT visitor) v,COUNT(DISTINCT session) s,ROUND(AVG(NULLIF(seconds,0))) sec,SUM(is_new) nw FROM hits h WHERE $where")[0];
+ $bounce=$A("SELECT ROUND(100.0*SUM(n=1)/MAX(COUNT(*),1)) b FROM (SELECT COUNT(*) n FROM hits h WHERE $where GROUP BY session)")[0]['b']??0;
+ $live=aquery("SELECT COUNT(DISTINCT visitor) n FROM hits WHERE ts>=? AND is_admin=0",[date('Y-m-d\TH:i:s',time()-300)])[0]['n']??0;
+ $byDay=[];foreach($A("SELECT day,COUNT(*) pv,COUNT(DISTINCT visitor) v FROM hits h WHERE $where GROUP BY day") as $r)$byDay[$r['day']]=$r;
+ $days=[];for($d=strtotime($f['from']);$d<=strtotime($f['to'])&&count($days)<370;$d+=86400){$k=date('Y-m-d',$d);$days[$k]=[(int)($byDay[$k]['pv']??0),(int)($byDay[$k]['v']??0)];}
+ $max=max(1,...array_map(fn($x)=>$x[0],array_values($days))?:[1]);
+ $G=fn(string $col,int $n=10,string $extra='')=>$A("SELECT $col k,COUNT(*) n,COUNT(DISTINCT visitor) v FROM hits h WHERE $where $extra GROUP BY k HAVING k IS NOT NULL ORDER BY v DESC,n DESC LIMIT $n");
+ $pages=$A("SELECT path,MAX(title) title,COUNT(*) n,COUNT(DISTINCT visitor) v,ROUND(AVG(NULLIF(seconds,0))) sec,ROUND(AVG(NULLIF(scroll,0))) sc FROM hits h WHERE $where GROUP BY path ORDER BY n DESC LIMIT 25");
+ $ew=['e.day>=?','e.day<=?'];$ep=[$f['from'],$f['to']];if(!$f['admins'])$ew[]='e.is_admin=0';if($f['path']!==''){$ew[]='e.path=?';$ep[]=$f['path'];}if($f['visitor']!==''){$ew[]='e.visitor=?';$ep[]=$f['visitor'];}
+ $clicks=aquery("SELECT kind,target,MAX(label) label,COUNT(*) n,COUNT(DISTINCT visitor) v FROM events e WHERE ".implode(' AND ',$ew)." GROUP BY kind,target ORDER BY n DESC LIMIT 25",$ep);
+ $kinds=['affiliate'=>'Affiliate','outbound'=>'Other website','link'=>'Own page','button'=>'Button','download'=>'Download'];
+ $pg=max(1,(int)($_GET['p']??1));$per=50;$npg=max(1,(int)ceil((int)$tot['pv']/$per));$pg=min($pg,$npg);
+ $log=$A("SELECT * FROM hits h WHERE $where ORDER BY h.id DESC LIMIT $per OFFSET ".(($pg-1)*$per));
+ $journey=$f['visitor']!==''?aquery("SELECT ts,path,'view' kind,'' label FROM hits WHERE visitor=? UNION ALL SELECT ts,target,kind,label FROM events WHERE visitor=? ORDER BY ts DESC LIMIT 200",[$f['visitor'],$f['visitor']]):[];
+ $dur=fn($s)=>$s?($s>=60?floor($s/60).'m '.($s%60).'s':$s.'s'):'—';
+ $boxes=[['Traffic sources','source',$G('h.source')],['Websites that sent visitors',null,$G("NULLIF(h.ref_host,'')")],['Countries','country',$G("NULLIF(h.country,'')")],['Time zones (region / city)',null,$G("NULLIF(h.tz,'')")],
+  ['Entry pages (first page of a visit)','path',$G('h.path',10,'AND h.entry=1')],['Campaigns (utm)',null,$G("NULLIF(h.utm_campaign,'')")],['Devices','device',$G('h.device')],['Browsers',null,$G('h.browser')],['Operating systems',null,$G('h.os')],['Languages',null,$G("NULLIF(h.lang,'')")],['Screen sizes',null,$G("NULLIF(h.screen,'')")],['New vs returning',null,$A("SELECT CASE WHEN is_new=1 THEN 'New visitors' ELSE 'Returning' END k,COUNT(*) n,COUNT(DISTINCT visitor) v FROM hits h WHERE $where GROUP BY k ORDER BY v DESC")]];
+ $vtot=max(1,(int)$tot['v']);
+?>
+ <section class="panel"><?= pageHead('chart','Analytics','Every visit to your website: who came, from where, which pages they read, how long, and what they clicked.','<a class="button button-outline" href="'.e($aurl(['export'=>1])).'">'.aicon('file').' Export CSV</a>') ?>
+ <form class="filters" method="get"><input type="hidden" name="view" value="analytics">
+  <label>From<input class="input" type="date" name="from" value="<?= e($f['from']) ?>"></label>
+  <label>To<input class="input" type="date" name="to" value="<?= e($f['to']) ?>"></label>
+  <label>Device<select class="input" name="device"><option value="">All devices</option><?php foreach(['Desktop','Mobile','Tablet'] as $o): ?><option <?= $f['device']===$o?'selected':'' ?>><?= $o ?></option><?php endforeach ?></select></label>
+  <label>Page<input class="input" name="path" value="<?= e($f['path']) ?>" placeholder="/page-url"></label>
+  <label>Source<input class="input" name="source" value="<?= e($f['source']) ?>" placeholder="Google, Pinterest…"></label>
+  <label>Country<input class="input" name="country" value="<?= e($f['country']) ?>" placeholder="IN, US…" maxlength="2"></label>
+  <label class="check-row"><input type="checkbox" name="admins" value="1" <?= $f['admins']?'checked':'' ?>> Include my own visits</label>
+  <?php if($f['visitor']!==''): ?><input type="hidden" name="visitor" value="<?= e($f['visitor']) ?>"><?php endif ?>
+  <div class="filters-actions"><button class="button button-primary"><?= aicon('search') ?> Apply</button><a class="button button-outline" href="/admin.php?view=analytics">Reset</a>
+   <?php foreach(['Today'=>[0,0],'7 days'=>[6,0],'30 days'=>[29,0],'90 days'=>[89,0],'Year'=>[364,0]] as $l=>[$a]): ?><a class="button button-outline button-sm" href="<?= e($aurl(['from'=>date('Y-m-d',strtotime("-$a days")),'to'=>date('Y-m-d'),'p'=>null])) ?>"><?= $l ?></a><?php endforeach ?></div>
+ </form>
+ <?php if($f['visitor']!==''): ?><p class="notice">Showing one visitor <code><?= e(substr($f['visitor'],0,8)) ?></code>. <a href="<?= e($aurl(['visitor'=>null])) ?>">Show everyone</a></p><?php endif ?>
+ <div class="glance glance-4 glance-6">
+  <?php foreach([['Live now',(int)$live,'clock','teal','visitors in the last 5 min'],['Visitors',(int)$tot['v'],'users','blue','unique people'],['Visits',(int)$tot['s'],'send','violet','sessions'],['Page views',(int)$tot['pv'],'file','amber','pages opened'],['Avg. time on page',$dur((int)$tot['sec']),'clock','blue','reading time'],['Bounce rate',((int)$bounce).'%','chart','teal','left after 1 page']] as [$label,$n,$ic,$tone,$sub]): ?>
+   <div class="tile tile-<?= $tone ?>" title="<?= e($sub) ?>"><span class="tile-icon"><?= aicon($ic) ?></span><span><b class="tile-num"><?= is_int($n)?number_format($n):e($n) ?></b><span class="tile-label"><?= $label ?></span></span></div>
+  <?php endforeach ?>
+ </div>
+ <section class="box chart-box"><h2 class="box-title"><?= aicon('chart','icon title-icon') ?> Visitors and page views per day <span class="muted"><span class="key key-v"></span> visitors <span class="key key-pv"></span> page views</span></h2>
+  <?php $n=max(1,count($days)); ?>
+  <svg class="bar-chart" viewBox="0 0 <?= $n*10 ?> 120" preserveAspectRatio="none" role="img" aria-label="Visitors and page views per day">
+   <?php $i=0;foreach($days as $d=>[$pv,$v]): $h=$pv?max(2,round($pv/$max*110)):0;$hv=$v?max(2,round($v/$max*110)):0; ?><g><title><?= e(date('D, M j',strtotime($d))) ?>: <?= $v ?> visitors, <?= $pv ?> page views</title><rect class="pv" x="<?= $i*10+1 ?>" y="<?= 115-$h ?>" width="8" height="<?= $h ?>" rx="1.5"/><rect x="<?= $i*10+2.5 ?>" y="<?= 115-$hv ?>" width="5" height="<?= $hv ?>" rx="1.5"/></g><?php $i++;endforeach ?>
+   <line x1="0" y1="115.5" x2="<?= $n*10 ?>" y2="115.5"/>
+  </svg>
+  <div class="chart-axis"><span><?= e(date('M j',strtotime($f['from']))) ?></span><span>max <?= $max ?> views/day</span><span><?= e(date('M j',strtotime($f['to']))) ?></span></div>
+ </section>
+ <h2 class="section-h"><?= aicon('file','icon title-icon') ?> Pages</h2>
+ <div class="table-wrap"><table class="list-table"><thead><tr><th>Page</th><th class="num">Views</th><th class="num">Visitors</th><th class="num">Avg. time</th><th class="num">Read depth</th></tr></thead><tbody>
+  <?php foreach($pages as $r): ?><tr><td><a class="row-title" href="<?= e($aurl(['path'=>$r['path'],'p'=>null])) ?>"><?= e($r['title']!==''?mb_strimwidth($r['title'],0,80,'…'):$r['path']) ?></a><br><a class="muted" href="<?= e($r['path']) ?>" target="_blank" rel="noopener"><?= e($r['path']) ?></a></td><td class="num"><?= number_format((int)$r['n']) ?></td><td class="num"><?= number_format((int)$r['v']) ?></td><td class="num"><?= $dur((int)$r['sec']) ?></td><td class="num"><?= $r['sc']?(int)$r['sc'].'%':'—' ?></td></tr><?php endforeach ?>
+  <?php if(!$pages): ?><tr><td colspan="5" class="empty muted">No visits recorded yet. Tracking starts as soon as this update is live; open your website in another browser to see yourself here (tick “Include my own visits” if you are logged in).</td></tr><?php endif ?>
+ </tbody></table></div>
+ <div class="breakdowns">
+  <?php foreach($boxes as [$title,$param,$data]): ?>
+  <section class="box"><h2 class="box-title"><?= $title ?></h2><?php if(!$data): ?><p class="muted">No data yet.</p><?php endif ?><ul class="bars"><?php foreach($data as $r): $label=$r['k']??'Unknown'; if($title==='Countries')$label=countryLabel((string)$r['k']); ?><li><?php if($param&&$r['k']!==null): ?><a href="<?= e($aurl([$param=>$r['k'],'p'=>null])) ?>"><?php else: ?><a><?php endif ?><span><?= e($label) ?></span><b title="<?= (int)$r['n'] ?> page views"><?= number_format((int)$r['v']) ?></b></a><i><em data-w="<?= round($r['v']/$vtot*100) ?>"></em></i></li><?php endforeach ?></ul></section>
+  <?php endforeach ?>
+ </div>
+ <h2 class="section-h"><?= aicon('send','icon title-icon') ?> What people clicked</h2>
+ <div class="table-wrap"><table class="list-table"><thead><tr><th>Link or button</th><th>Type</th><th class="num">Clicks</th><th class="num">People</th></tr></thead><tbody>
+  <?php foreach($clicks as $r): ?><tr><td><b><?= e($r['label']!==''?mb_strimwidth($r['label'],0,70,'…'):'(no text)') ?></b><?php if($r['target']!==''): ?><br><span class="muted ellipsis" title="<?= e($r['target']) ?>"><?= e(mb_strimwidth($r['target'],0,80,'…')) ?></span><?php endif ?></td><td><span class="chip chip-teal"><?= e($kinds[$r['kind']]??$r['kind']) ?></span></td><td class="num"><?= number_format((int)$r['n']) ?></td><td class="num"><?= number_format((int)$r['v']) ?></td></tr><?php endforeach ?>
+  <?php if(!$clicks): ?><tr><td colspan="4" class="empty muted">No clicks yet.</td></tr><?php endif ?>
+ </tbody></table></div>
+ <?php if($journey): ?>
+ <h2 class="section-h"><?= aicon('user','icon title-icon') ?> This visitor's journey</h2>
+ <div class="table-wrap"><table class="list-table"><thead><tr><th>Time</th><th>What</th></tr></thead><tbody>
+  <?php foreach($journey as $j): ?><tr><td class="nowrap"><?= e(date('M j, g:i:s a',strtotime($j['ts']))) ?></td><td><?= $j['kind']==='view'?'Viewed <b>'.e($j['path']).'</b>':'Clicked <b>'.e($j['label']?:$j['path']).'</b> <span class="muted">('.e($kinds[$j['kind']]??$j['kind']).')</span>' ?></td></tr><?php endforeach ?>
+ </tbody></table></div>
+ <?php endif ?>
+ <h2 class="section-h"><?= aicon('users','icon title-icon') ?> Visit log <span class="muted"><?= number_format((int)$tot['pv']) ?> page views</span></h2>
+ <div class="table-wrap"><table class="list-table click-table"><thead><tr><th>Time</th><th>Page</th><th>Came from</th><th>Visitor &amp; location</th><th>Device</th><th>Read</th></tr></thead><tbody>
+  <?php foreach($log as $h): ?><tr>
+   <td class="nowrap"><b><?= e(date('M j, Y',strtotime($h['ts']))) ?></b><br><span class="muted"><?= e(date('g:i:s a',strtotime($h['ts']))) ?></span></td>
+   <td><a class="row-title" href="<?= e($aurl(['path'=>$h['path'],'p'=>null])) ?>"><?= e(mb_strimwidth($h['title']?:$h['path'],0,60,'…')) ?></a><br><span class="muted"><?= e($h['path']) ?></span><?= $h['entry']?' <span class="tag">entry</span>':'' ?></td>
+   <td><a href="<?= e($aurl(['source'=>$h['source'],'p'=>null])) ?>"><span class="chip chip-teal"><?= e($h['source']) ?></span></a><?php if($h['utm_campaign']!==''): ?><br><span class="muted">Campaign: <?= e($h['utm_campaign']) ?></span><?php endif ?><?php if($h['referrer']!==''): ?><br><span class="muted ellipsis" title="<?= e($h['referrer']) ?>"><?= e(mb_strimwidth($h['referrer'],0,48,'…')) ?></span><?php endif ?></td>
+   <td><a href="<?= e($aurl(['visitor'=>$h['visitor'],'p'=>null])) ?>" title="Show this visitor's journey"><code><?= e(substr($h['visitor'],0,8)) ?></code></a><?= $h['is_new']?' <span class="tag">new</span>':'' ?><?= $h['is_admin']?' <span class="tag">you</span>':'' ?><br><span class="muted"><?= e(countryLabel($h['country'])) ?><?= $h['tz']!==''?' · '.e(str_replace('_',' ',$h['tz'])):'' ?><?= $h['ip']!==''?' · '.e($h['ip']):'' ?></span></td>
+   <td><?= e($h['device']) ?><br><span class="muted"><?= e($h['browser']) ?> · <?= e($h['os']) ?><?= $h['screen']!==''?' · '.e($h['screen']):'' ?></span></td>
+   <td class="nowrap"><?= $dur((int)$h['seconds']) ?><br><span class="muted"><?= (int)$h['scroll'] ?>% scrolled</span></td>
+  </tr><?php endforeach ?>
+  <?php if(!$log): ?><tr><td colspan="6" class="empty muted">No visits match these filters.</td></tr><?php endif ?>
+ </tbody></table></div>
+ <?php if($npg>1): ?><nav class="pagination" aria-label="Pages"><?php for($i=max(1,$pg-3);$i<=min($npg,$pg+3);$i++): ?><a class="<?= $i===$pg?'current':'' ?>" href="<?= e($aurl(['p'=>$i])) ?>"><?= $i ?></a><?php endfor ?></nav><?php endif ?>
+ <div class="breakdowns">
+ <form method="post" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="geoip_update"><h2 class="box-title"><?= aicon('gear','icon title-icon') ?> Country database</h2>
+  <p class="hint"><?= is_file(GEOIP_DB)?'Last updated '.e(date('M j, Y',strtotime(setting('geoip_updated',date('c',filemtime(GEOIP_DB)))))).'.':'<b>Not downloaded yet</b> — countries show as “Unknown” until you click the button below (takes about a minute).' ?> It updates itself every month through the hourly cron job. <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a>.</p>
+  <div><button class="button button-primary"><?= aicon('send') ?> Download / update now</button></div></form>
+ <form method="post" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="analytics_settings"><h2 class="box-title"><?= aicon('gear','icon title-icon') ?> Settings</h2>
+  <p class="hint">Visits are recorded by the site itself (no outside service). Bots are skipped; your own visits while logged in are marked and hidden by default. Data is kept for 13 months, IP addresses for 90 days. Google Analytics keeps running alongside.</p>
+  <label class="check-row"><input type="checkbox" name="analytics_off" value="1" <?= setting('analytics_off')==='1'?'checked':'' ?>> Pause tracking</label>
+  <div><button class="button button-primary">Save</button></div></form>
+ </div>
+ </section>
+
+<?php elseif($view==='files'):
+ $roots=fileRoots();$root=isset($roots[$_GET['root']??''])?$_GET['root']:'public';$rel=(string)($_GET['path']??'');
+ try{[, , $abs,$rel]=filePath($root,$rel);$isFile=is_file($abs);if(!$isFile&&!is_dir($abs))throw new RuntimeException('Not found.');$fileErr='';}catch(RuntimeException $ex){$fileErr=$ex->getMessage();$rel='';[, , $abs]=filePath($root,'');$isFile=false;}
+ $dirRel=$isFile?(dirname($rel)==='.'?'':dirname($rel)):$rel;$writable=$roots[$root][2];
+ $furl=fn(array $o)=>'/admin.php?'.http_build_query(array_filter(['view'=>'files','root'=>$root,'path'=>$dirRel]+$o,fn($v)=>$v!==null&&$v!==''));
+ $size=fn(int $b)=>$b>=1048576?round($b/1048576,1).' MB':($b>=1024?round($b/1024).' KB':$b.' B');
+?>
+ <section class="panel"><?= pageHead('folder','File manager','See your website files, upload new ones and edit text files.') ?>
+ <nav class="tabs" aria-label="Folders"><?php foreach($roots as $k=>[$label]): ?><a class="<?= $k===$root?'active':'' ?>" href="/admin.php?view=files&amp;root=<?= $k ?>"><?= e($label) ?></a><?php endforeach ?></nav>
+ <p class="hint"><?= match($root){
+  'public'=>'<b>Safe from git pull.</b> Files here are yours: they are not part of the code, so updates never touch them. Each file is online at <code>/files/name</code> and also at <code>/name</code> (good for Google/Bing/Pinterest verification files).',
+  'uploads'=>'<b>Safe from git pull.</b> Images from the media library and post editor.',
+  default=>'<b>View only.</b> This is the website code from GitHub. Editing it here would be overwritten (or would block) the next <code>git pull</code>, so ask for code changes instead. API keys and databases are hidden.'} ?></p>
+ <?php if($fileErr): ?><p class="notice notice-error"><?= e($fileErr) ?></p><?php endif ?>
+ <nav class="crumbs" aria-label="Path"><a href="<?= e($furl(['path'=>null])) ?>"><?= e($roots[$root][0]) ?></a><?php $acc='';foreach(array_filter(explode('/',$rel),'strlen') as $part): $acc=ltrim("$acc/$part",'/'); ?> / <a href="<?= e($furl(['path'=>$acc])) ?>"><?= e($part) ?></a><?php endforeach ?></nav>
+ <?php if($isFile): $ext=fileExt($rel);$url=fileUrl($root,$rel);$text=in_array($ext,TEXT_TYPES,true)||($root==='code'&&in_array($ext,['php','htaccess','lock','yml','yaml','sh','ini','conf',''],true)); ?>
+  <section class="box"><h2 class="box-title"><?= aicon('file','icon title-icon') ?> <?= e(basename($rel)) ?> <span class="muted"><?= $size((int)filesize($abs)) ?> · changed <?= e(date('M j, Y g:i a',(int)filemtime($abs))) ?></span></h2>
+   <?php if($url): ?><p><a href="<?= e($url) ?>" target="_blank" rel="noopener"><?= e(siteBase().$url) ?></a></p><?php endif ?>
+   <?php if($text&&filesize($abs)<=2*1024*1024): ?>
+    <form method="post" class="stack"><?= csrfField() ?><input type="hidden" name="action" value="file_save"><input type="hidden" name="root" value="<?= e($root) ?>"><input type="hidden" name="path" value="<?= e($rel) ?>">
+     <textarea class="input code-input file-editor" name="content" rows="24" spellcheck="false" <?= $writable?'':'readonly' ?>><?= e((string)file_get_contents($abs)) ?></textarea>
+     <?php if($writable): ?><div><button class="button button-primary"><?= aicon('send') ?> Save file</button></div><?php endif ?>
+    </form>
+   <?php elseif(str_starts_with((string)(FILE_TYPES[$ext]??''),'image/')&&$url): ?><img class="file-preview" src="<?= e($url) ?>" alt="">
+   <?php else: ?><p class="muted">This file cannot be shown here<?= $url?', open it with the link above':'' ?>.</p><?php endif ?>
+   <?php if($writable): ?><div class="row-actions-inline">
+    <form method="post" class="inline-form"><?= csrfField() ?><input type="hidden" name="action" value="file_rename"><input type="hidden" name="root" value="<?= e($root) ?>"><input type="hidden" name="path" value="<?= e($rel) ?>"><input class="input input-sm" name="to" value="<?= e(basename($rel)) ?>" aria-label="New name"><button class="button button-outline button-sm">Rename</button></form>
+    <form method="post" class="inline-form" data-confirm="Delete <?= e(basename($rel)) ?>? This cannot be undone."><?= csrfField() ?><input type="hidden" name="action" value="file_delete"><input type="hidden" name="root" value="<?= e($root) ?>"><input type="hidden" name="path" value="<?= e($rel) ?>"><button class="button button-danger button-sm"><?= aicon('trash') ?> Delete</button></form>
+   </div><?php endif ?>
+  </section>
+ <?php else: $items=$fileErr?[]:fileList($root,$rel); ?>
+  <?php if($writable): ?><div class="breakdowns">
+   <form method="post" enctype="multipart/form-data" class="box stack"><?= csrfField() ?><input type="hidden" name="action" value="file_upload"><input type="hidden" name="root" value="<?= e($root) ?>"><input type="hidden" name="path" value="<?= e($rel) ?>">
+    <h2 class="box-title"><?= aicon('plus','icon title-icon') ?> Upload files</h2><input class="input" type="file" name="files[]" multiple required>
+    <p class="hint">Allowed: <?= e(implode(', ',array_keys(FILE_TYPES))) ?>. Max <?= e(ini_get('upload_max_filesize')) ?> per file.</p><div><button class="button button-primary">Upload</button></div></form>
+   <div class="box stack"><h2 class="box-title"><?= aicon('pen','icon title-icon') ?> Create</h2>
+    <form method="post" class="inline-form"><?= csrfField() ?><input type="hidden" name="action" value="file_save"><input type="hidden" name="root" value="<?= e($root) ?>"><input type="hidden" name="path" value="<?= e($rel) ?>"><input type="hidden" name="content" value=""><input class="input input-sm" name="new_name" placeholder="new-file.txt" required><button class="button button-outline button-sm">New text file</button></form>
+    <form method="post" class="inline-form"><?= csrfField() ?><input type="hidden" name="action" value="file_mkdir"><input type="hidden" name="root" value="<?= e($root) ?>"><input type="hidden" name="path" value="<?= e($rel) ?>"><input class="input input-sm" name="name" placeholder="folder-name" required><button class="button button-outline button-sm">New folder</button></form>
+   </div>
+  </div><?php endif ?>
+  <div class="table-wrap"><table class="list-table"><thead><tr><th>Name</th><th class="num">Size</th><th>Changed</th></tr></thead><tbody>
+   <?php if($rel!==''): ?><tr><td colspan="3"><a href="<?= e($furl(['path'=>dirname($rel)==='.'?null:dirname($rel)])) ?>">← Up one folder</a></td></tr><?php endif ?>
+   <?php foreach($items as $it): ?><tr><td><a class="row-title" href="<?= e($furl(['path'=>$it['rel']])) ?>"><?= aicon($it['dir']?'folder':'file','icon icon-sm') ?> <?= e($it['name']) ?><?= $it['dir']?'/':'' ?></a></td><td class="num"><?= $it['dir']?'—':$size((int)$it['size']) ?></td><td class="nowrap muted"><?= e(date('M j, Y g:i a',(int)$it['time'])) ?></td></tr><?php endforeach ?>
+   <?php if(!$items): ?><tr><td colspan="3" class="empty muted">This folder is empty.</td></tr><?php endif ?>
+  </tbody></table></div>
+ <?php endif ?>
+ </section>
 <?php elseif($view==='users'): ?>
  <section class="panel"><?= pageHead('users','Users','People who can sign in to this workspace.') ?>
  <div class="two-col">
@@ -955,6 +1123,8 @@ if(!isset($titles[$view]))$view='dashboard';
    <label>Body code <span class="muted">(right after &lt;body&gt;: e.g. Google Tag Manager noscript)</span><textarea class="input code-input" name="code_body" rows="4" spellcheck="false"><?= $f('code_body') ?></textarea></label>
    <label>Footer code <span class="muted">(before &lt;/body&gt;: chat widgets, extra scripts)</span><textarea class="input code-input" name="code_footer" rows="4" spellcheck="false"><?= $f('code_footer') ?></textarea></label>
    <label>Allowed script domains <span class="muted">(space or comma separated)</span><input class="input" name="code_domains" value="<?= $f('code_domains') ?>" maxlength="1000" placeholder="connect.facebook.net www.clarity.ms *.hotjar.com"></label>
+   <label>ads.txt <span class="muted">(served at <a href="/ads.txt" target="_blank" rel="noopener">/ads.txt</a> — AdSense and other ad networks)</span><textarea class="input code-input" name="ads_txt" rows="4" spellcheck="false"><?= $f('ads_txt',ADS_TXT_DEFAULT) ?></textarea></label>
+   <p class="hint">Everything in this section is saved in the site database, so a <code>git pull</code> never removes it.</p>
    <p class="hint">For security the site only runs scripts from its own files. Inline &lt;script&gt; code you paste here is allowed automatically; scripts or iframes loaded from another website need that website's domain listed above. Code runs on the public site only, not in the admin.</p>
   </div></section>
   <div class="save-bar"><button class="button button-primary button-lg"><?= aicon('send') ?> Save SEO settings</button></div>

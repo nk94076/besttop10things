@@ -184,7 +184,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    indexNowPing(['/'.$a['slug'],'/'.$b['slug']]);
    flash('“'.$a['title'].'” now redirects (301) to “'.$b['title'].'” and was moved to the Trash. Copy any unique tips from it into the remaining post.','/admin.php?view=edit&id='.$dst);
   }
-  if(in_array($action,['advisor_settings','refresh_ideas','idea_status','idea_draft','ai_fixes','apply_fixes','discard_fixes','undo_revision'],true)){
+  if(in_array($action,['advisor_settings','refresh_ideas','idea_status','idea_draft','ai_fixes','apply_fixes','discard_fixes','undo_revision','link_orphan','fix_cannibal','autopilot_settings','autopilot_run'],true)){
    $tab=(string)($_POST['tab']??'doctor');$back='/admin.php?view=advisor&tab='.rawurlencode($tab);
    if($action==='advisor_settings'){foreach(['advisor_weekly_fixes','advisor_auto_meta','advisor_auto_apply'] as $k)run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,isset($_POST[$k])?'1':'0']);flash('Content Advisor settings saved.',$back);}
    if($action==='refresh_ideas'){@set_time_limit(300);$n=refreshKeywordIdeas();flash("$n keyword ideas checked.",$back);}
@@ -196,6 +196,14 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     flash('The draft is being written in the background. Refresh this page in a minute.',$back);
    }
    if($action==='ai_fixes'){$pid=(int)($_POST['id']??0);queueFixes($pid);$log=processAiQueue(1);flash(($log?end($log):'Working on it… refresh in a minute.'),$back.'#post-'.$pid);}
+   if($action==='fix_cannibal'){$pid=(int)($_POST['id']??0);flash(fixCannibal($pid),$back.'#post-'.$pid);}
+   if($action==='autopilot_settings'){
+    $vals=['autopilot_on'=>isset($_POST['autopilot_on'])?'1':'0','autopilot_hour'=>(string)max(0,min(23,(int)($_POST['autopilot_hour']??10))),'autopilot_posts'=>(string)max(1,min(30,(int)($_POST['autopilot_posts']??10)))];
+    foreach($vals as $k=>$v)run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,$v]);
+    flash($vals['autopilot_on']==='1'?'Autopilot is on: it runs every day at '.date('g:00 a',mktime((int)$vals['autopilot_hour'],0)).'.':'Autopilot is off.',$back);
+   }
+   if($action==='autopilot_run'){$last=setting('autopilot_last');$log=runAutopilot(2);if($last!==date('Y-m-d'))run('UPDATE settings SET value=? WHERE key=?',[$last,'autopilot_last']);flash(count($log).' step'.(count($log)===1?'':'s').' done — see the log below.',$back);}
+   if($action==='link_orphan'){@set_time_limit(300);$pid=(int)($_POST['id']??0);flash(linkOrphan($pid),$back.'#post-'.$pid);}
    if($action==='discard_fixes'){run('DELETE FROM ai_suggestions WHERE post_id=?',[(int)($_POST['id']??0)]);flash('Suggestion discarded.',$back);}
    if($action==='apply_fixes'){$pid=(int)($_POST['id']??0);flash(applyFixes($pid,['meta'=>isset($_POST['meta']),'tldr'=>isset($_POST['tldr']),'sections'=>(array)($_POST['sections']??[]),'faq'=>(array)($_POST['faq']??[])]).' You can undo it under History.',$back.'#post-'.$pid);}
    if($action==='undo_revision'){flash(undoRevision((int)($_POST['id']??0)),'/admin.php?view=advisor&tab=history');}
@@ -626,8 +634,8 @@ if(!isset($titles[$view]))$view='dashboard';
    <?php endforeach ?></tbody></table></div>
  </div></section>
 
-<?php elseif($view==='advisor'): $tab=in_array($_GET['tab']??'',['doctor','ideas','history'],true)?$_GET['tab']:'doctor'; $ai=aiAvailable(); ?>
- <section class="panel"><?= pageHead('trophy','Content Advisor','What to write next, why pages are not ranking, and AI-prepared fixes you can apply with one click.','<div class="seg-tabs">'.implode('',array_map(fn($k,$l)=>'<a class="'.($tab===$k?'active':'').'" href="/admin.php?view=advisor&tab='.$k.'">'.$l.'</a>',['doctor','ideas','history'],['Content doctor','Keyword ideas','History'])).'</div>') ?>
+<?php elseif($view==='advisor'): $tab=in_array($_GET['tab']??'',['doctor','ideas','autopilot','history'],true)?$_GET['tab']:'doctor'; $ai=aiAvailable(); ?>
+ <section class="panel"><?= pageHead('trophy','Content Advisor','What to write next, why pages are not ranking, and AI-prepared fixes you can apply with one click.','<div class="seg-tabs">'.implode('',array_map(fn($k,$l)=>'<a class="'.($tab===$k?'active':'').'" href="/admin.php?view=advisor&tab='.$k.'">'.$l.'</a>',['doctor','ideas','autopilot','history'],['Content doctor','Keyword ideas','Autopilot','History'])).'</div>') ?>
  <?php if(!$ai): ?><p class="notice">AI fixes and drafts need the AI assistant: <a href="/admin.php?view=seo#ai">connect it in SEO &amp; Code</a>. The diagnosis and keyword ideas work without it.</p><?php endif ?>
  <?php if(!gscKey()): ?><p class="notice">Connect <a href="/admin.php?view=search">Search Console</a> to add ranking data (missing searches, page-2 pages, low click-through) to the diagnosis.</p><?php endif ?>
  <?php if($tab==='doctor'): $diag=array_filter(diagnosePosts(),fn($d)=>$d['issues']); $sugs=[];foreach(query('SELECT * FROM ai_suggestions') as $x)$sugs[$x['post_id']]=json_decode($x['data'],true); ?>
@@ -639,6 +647,8 @@ if(!isset($titles[$view]))$view='dashboard';
    <div class="doc-head"><div><a class="row-title" href="/admin.php?view=edit&id=<?= $p['id'] ?>"><?= e($p['title']) ?></a><br><span class="muted"><?= e($p['category']) ?> · SEO <?= $d['scores'][0] ?> · AI <?= $d['scores'][1] ?> · <a href="<?= e(reviewUrl($p)) ?>" target="_blank">view</a></span></div>
     <div class="row-buttons"><?php if($sg&&!empty($sg['pending'])): ?><span class="chip chip-amber">AI is working…</span><?php elseif(!$sg): ?><form method="post"><?= csrfField() ?><input type="hidden" name="action" value="ai_fixes"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="button button-primary button-sm" <?= $ai?'':'disabled' ?>><?= aicon('bulb') ?> Get AI fixes</button></form><?php endif ?></div></div>
    <ul class="check-list"><?php foreach($d['issues'] as $iss): [$sev,$code,$t,$detail]=$iss; ?><li class="<?= $sev>=3?'':'warn' ?>"><span><b><?= e($t) ?></b> — <?= e($detail) ?>
+    <?php if($code==='orphan'): ?><form method="post" class="merge-form"><?= csrfField() ?><input type="hidden" name="action" value="link_orphan"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="button button-outline button-sm" <?= $ai?'':'disabled' ?>><?= aicon('bulb') ?> Fix: add links to it with AI</button></form><?php endif ?>
+    <?php if($code==='cannibal'): ?><form method="post" class="merge-form"><?= csrfField() ?><input type="hidden" name="action" value="fix_cannibal"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="button button-outline button-sm" <?= $ai?'':'disabled' ?>><?= aicon('bulb') ?> Fix: give it its own keyword with AI</button></form><?php endif ?>
     <?php if($code==='cannibal'&&!empty($iss[4])): ?><form method="post" class="merge-form" data-confirm="Move this post to the Trash and redirect its URL (301) to the selected post?"><?= csrfField() ?><input type="hidden" name="action" value="merge_post"><input type="hidden" name="id" value="<?= $p['id'] ?>"><select class="input input-sm" name="into" aria-label="Merge into"><?php foreach($iss[4] as $pid): ?><option value="<?= (int)$pid ?>"><?= e($ptitles[$pid]??("#".$pid)) ?></option><?php endforeach ?></select><button class="button button-outline button-sm">Merge into this post</button></form><?php endif ?>
    </span></li><?php endforeach ?></ul>
    <?php if($sg&&empty($sg['pending'])): ?>
@@ -676,6 +686,26 @@ if(!isset($titles[$view]))$view='dashboard';
    </div></td></tr><?php endforeach ?>
   <?php if(!$ideas): ?><tr><td colspan="5" class="muted empty"><?= $status==='new'?'No ideas yet. Click “Find new ideas”.':'Nothing here.' ?></td></tr><?php endif ?>
   </tbody></table></div>
+ <?php elseif($tab==='autopilot'): $logDays=query('SELECT day,COUNT(*) n,SUM(ok=0) bad FROM autopilot_log GROUP BY day ORDER BY day DESC LIMIT 60');$day=preg_match('/^\d{4}-\d{2}-\d{2}$/',(string)($_GET['day']??''))?$_GET['day']:($logDays[0]['day']??date('Y-m-d'));$rows=query('SELECT l.*,r.title FROM autopilot_log l LEFT JOIN reviews r ON r.id=l.post_id WHERE l.day=? ORDER BY l.id',[$day]); ?>
+  <section class="box"><h2 class="box-title"><?= aicon('clock','icon title-icon') ?> Daily autopilot <?= setting('autopilot_on')==='1'?'<span class="chip chip-teal">On</span>':'<span class="chip">Off</span>' ?></h2>
+   <p class="hint">Every day at the chosen hour the site checks all published posts and fixes the most important problems by itself: new focus keyword when two posts compete, links from related articles to posts nobody links to, and content &amp; SEO fixes (title, description, quick answer, missing sections, FAQs) for low scores, thin, outdated or page-2 posts. A copy of every post is saved first, so anything can be undone in History. Each post is handled at most once every 14 days.</p>
+   <form method="post" class="stack"><?= csrfField() ?><input type="hidden" name="action" value="autopilot_settings"><input type="hidden" name="tab" value="autopilot">
+    <label class="check-row"><input type="checkbox" name="autopilot_on" <?= setting('autopilot_on')==='1'?'checked':'' ?>> <b>Turn on the daily autopilot</b></label>
+    <div class="ap-grid">
+     <label>Run every day at<select class="input" name="autopilot_hour"><?php for($h=0;$h<24;$h++): ?><option value="<?= $h ?>" <?= (int)setting('autopilot_hour','10')===$h?'selected':'' ?>><?= date('g:00 a',mktime($h,0)) ?></option><?php endfor ?></select></label>
+     <label>Posts to fix per day<select class="input" name="autopilot_posts"><?php foreach([3,5,10,15,20,30] as $n): ?><option <?= (int)setting('autopilot_posts','10')===$n?'selected':'' ?>><?= $n ?></option><?php endforeach ?></select></label>
+    </div>
+    <p class="hint">Time zone: India (<?= e(date('g:i a')) ?> now). Needs the hourly cron job <code>php scripts/content-advisor.php</code> (already set up for the Content Advisor). Free Gemini has a daily limit; if it is reached, the rest is retried the next day.<?= setting('autopilot_last')?' Last run: '.e(date('M j',strtotime(setting('autopilot_last')))).'.':'' ?></p>
+    <div class="row-buttons"><button class="button button-primary">Save</button></div></form>
+   <form method="post" class="row-buttons" data-confirm="Run the autopilot now for 2 posts? This takes 1–3 minutes."><?= csrfField() ?><input type="hidden" name="action" value="autopilot_run"><input type="hidden" name="tab" value="autopilot"><button class="button button-outline" <?= $ai?'':'disabled' ?>><?= aicon('send') ?> Run now (2 posts)</button></form>
+  </section>
+  <div class="ap-log">
+   <nav class="ap-days" aria-label="Days"><?php foreach($logDays as $d): ?><a class="<?= $d['day']===$day?'active':'' ?>" href="/admin.php?view=advisor&amp;tab=autopilot&amp;day=<?= $d['day'] ?>"><?= e(date('D, M j',strtotime($d['day']))) ?> <span class="muted"><?= (int)$d['n'] ?><?= $d['bad']?' · <b class="over">'.(int)$d['bad'].' failed</b>':'' ?></span></a><?php endforeach ?><?php if(!$logDays): ?><p class="muted">No runs yet.</p><?php endif ?></nav>
+   <section class="box"><h2 class="box-title"><?= aicon('file','icon title-icon') ?> What the autopilot did on <?= e(date('l, M j',strtotime($day))) ?></h2>
+    <ul class="ap-items"><?php foreach($rows as $r): ?><li class="<?= $r['ok']?'ok':'bad' ?>"><span class="ap-time"><?= e(date('g:i a',strtotime($r['created_at']))) ?></span><span><b><?= $r['ok']?'✓':'✗' ?> <?= e($r['action']) ?></b> — <?= e($r['message']) ?><?php if($r['post_id']): ?> <a href="/admin.php?view=edit&amp;id=<?= (int)$r['post_id'] ?>">edit post</a><?php endif ?></span></li><?php endforeach ?>
+    <?php if(!$rows): ?><li class="muted">Nothing logged for this day.</li><?php endif ?></ul>
+   </section>
+  </div>
  <?php else: $revs=query('SELECT v.id,v.post_id,v.note,v.created_at,r.title FROM post_revisions v LEFT JOIN reviews r ON r.id=v.post_id ORDER BY v.id DESC LIMIT 60'); ?>
   <p class="hint">A copy of the article is saved before every AI change. Undo restores that copy (and saves the current version first, so undo can be undone).</p>
   <div class="table-wrap"><table class="list-table"><thead><tr><th>When</th><th>Article</th><th>Saved</th><th class="kebab-col"></th></tr></thead><tbody>

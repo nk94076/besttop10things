@@ -197,6 +197,102 @@ function applyFixes(int $postId, array $parts): string {
  return 'Applied: '.implode(', ',$done).'.';
 }
 
+// "No in-article links point here": the fix lives in OTHER articles. Picks the 1–2 most related live posts
+// (same language, same category first, shared title words), has the AI write one natural sentence with a link
+// to the orphan, and inserts it at the end of the most fitting section. A revision is saved first (undo in History).
+function linkOrphan(int $targetId, int $max=2): string {
+ $t=query('SELECT * FROM reviews r WHERE r.id=? AND '.live(),[$targetId])[0]??null;
+ if(!$t)throw new RuntimeException('Post not found or not published.');
+ $url='/'.$t['slug'];$lang=detectLang($t['title'].' '.$t['body']);
+ $words=kwTokens($t['title'].' '.$t['focus_keyword']);
+ $cands=[];
+ foreach(query('SELECT * FROM reviews r WHERE r.id!=? AND '.live(),[$targetId]) as $p){
+  if(str_contains($p['body'],']('.$url.')')||str_contains($p['body'],'href="'.$url.'"')||detectLang($p['title'].' '.$p['body'])!==$lang)continue;
+  $tw=kwTokens($p['title'].' '.$p['focus_keyword']);
+  $cands[]=[($p['category_id']===$t['category_id']?3:0)+count(array_intersect($words,$tw)),$p];
+ }
+ usort($cands,fn($a,$b)=>$b[0]<=>$a[0]);
+ if(!$cands)throw new RuntimeException('No other published article in the same language to link from.');
+ $done=[];$errors=[];
+ $picked=array_merge([$cands[0]],array_filter(array_slice($cands,1,$max-1),fn($c)=>$c[0]>0));
+ foreach($picked as [,$p]){
+  $body=str_replace("\r",'',trim($p['body']));
+  preg_match_all('/^##\s+(.+)$/mu',$body,$hm);
+  $heads=array_values(array_filter(array_map('trim',$hm[1]),fn($h)=>!preg_match('/^(faqs?|frequently asked|häufig|questions fréquentes)/iu',$h)));
+  $prompt="You are adding ONE internal link to an existing article so readers discover a related article.\n\nExisting article: {$p['title']}\nIts sections:\n- ".implode("\n- ",$heads?:['(no sections)'])."\n\nArticle to link to: {$t['title']}\nIts URL: $url\nWhat it is about: ".mb_substr($t['tldr']?:$t['excerpt'],0,400).
+   "\n\nReturn:\n- section: the exact heading from the list above where a mention fits most naturally (empty string if none fits).\n- sentence: 1–2 natural sentences in the existing article's language that add value for the reader and contain exactly one Markdown link [descriptive anchor text]($url). The anchor must describe the topic (not \"click here\"/\"this article\"). No other links, no headings.";
+  try{$r=aiJson($prompt,aiObject(['section'=>['type'=>'string'],'sentence'=>['type'=>'string']],'orphanlink'),2000,'low');}
+  catch(RuntimeException $e){$errors[]=$e->getMessage();continue;}
+  $sentence=trim(preg_replace('/\[([^\]]+)\]\((?!'.preg_quote($url,'/').'\))[^)]*\)/u','$1',(string)($r['sentence']??'')));
+  if(!str_contains($sentence,']('.$url.')'))$sentence.=' Related: ['.$t['title'].']('.$url.').';
+  // End of the chosen section, else just before the FAQ/conclusion, else at the end.
+  $pos=null;$sec=trim((string)($r['section']??''));
+  if($sec!==''&&preg_match('/^##\s+'.preg_quote($sec,'/').'\s*$/mu',$body,$m,PREG_OFFSET_CAPTURE)){
+   $start=$m[0][1]+strlen($m[0][0]);$pos=preg_match('/^##\s/mu',$body,$n,PREG_OFFSET_CAPTURE,$start)?$n[0][1]:strlen($body);
+  }elseif(preg_match('/^##\s+(faqs?|frequently asked questions|final|conclusion|fazit|bottom line|in summary|verdict)/imu',$body,$m,PREG_OFFSET_CAPTURE))$pos=$m[0][1];
+  $new=$pos===null?$body."\n\n".$sentence:rtrim(substr($body,0,$pos))."\n\n".$sentence."\n\n".ltrim(substr($body,$pos));
+  saveRevision($p,'Before adding a link to “'.$t['title'].'”');
+  run('UPDATE reviews SET body=?,updated_at=? WHERE id=?',[trim($new)."\n",date('c'),$p['id']]);
+  indexNowPing([reviewUrl($p)]);
+  $done[]='“'.$p['title'].'”';
+ }
+ if(!$done)throw new RuntimeException('Could not add links: '.implode(' — ',$errors));
+ return 'Added a link to this post in '.implode(' and ',$done).'. Undo in History if needed.';
+}
+
+// "Same focus keyword as another post": instead of merging, give this post its own, more specific focus keyword
+// (a long-tail variation that matches what the article is really about) and align the SEO title/description.
+function fixCannibal(int $postId): string {
+ $p=query('SELECT * FROM reviews r WHERE r.id=? AND '.live(),[$postId])[0]??null;
+ if(!$p)throw new RuntimeException('Post not found or not published.');
+ $kw=trim($p['focus_keyword']);
+ $peers=query('SELECT title,focus_keyword FROM reviews r WHERE r.id!=? AND lower(trim(r.focus_keyword))=lower(?) AND '.live(),[$postId,$kw]);
+ $taken=array_map(fn($r)=>mb_strtolower(trim($r['focus_keyword'])),query("SELECT focus_keyword FROM reviews WHERE id!=? AND status!='trash' AND trim(focus_keyword)!=''",[$postId]));
+ $heads=preg_match_all('/^##\s+(.+)$/mu',$p['body'],$m)?array_slice($m[1],0,12):[];
+ $prompt="Two or more articles on one website target the same focus keyword \"$kw\", so they compete in Google. Give THIS article its own focus keyword.\n\nThis article: {$p['title']}\nIntro: ".mb_substr($p['tldr']?:$p['excerpt'],0,400)."\nHeadings: ".implode(' | ',$heads).
+  "\n\nOther article(s) keeping \"$kw\":\n- ".implode("\n- ",array_column($peers,'title')).
+  "\n\nReturn:\n- focus_keyword: a specific 2–5 word search phrase (long-tail) that real people search, that this article answers better than the other(s), in the article's language. It must differ clearly from \"$kw\".\n- meta_title: 40–60 characters containing the new focus keyword.\n- meta_description: 130–155 characters containing the new focus keyword.\n- reason: one short sentence.";
+ $r=aiJson($prompt,aiObject(['focus_keyword'=>['type'=>'string'],'meta_title'=>['type'=>'string'],'meta_description'=>['type'=>'string'],'reason'=>['type'=>'string']],'cannibal'),2000,'low');
+ $new=mb_substr(trim((string)$r['focus_keyword']),0,100);
+ if($new===''||mb_strtolower($new)===mb_strtolower($kw)||in_array(mb_strtolower($new),$taken,true))throw new RuntimeException('The AI suggested a keyword that is already used. Try again.');
+ saveRevision($p,"Before new focus keyword (was “{$kw}”)");
+ run('UPDATE reviews SET focus_keyword=?,meta_title=?,meta_description=?,updated_at=? WHERE id=?',[$new,mb_substr(trim($r['meta_title']),0,200),mb_substr(trim($r['meta_description']),0,500),date('c'),$postId]);
+ indexNowPing([reviewUrl($p)]);
+ return "Focus keyword changed from “{$kw}” to “{$new}”, with a matching SEO title and description. ".trim((string)$r['reason']);
+}
+
+// ---- Autopilot: once a day (default 10:00) fix the most important problems on its own and log everything ----
+function autopilotLog(string $action, ?int $postId, bool $ok, string $msg): void {
+ run('INSERT INTO autopilot_log(day,post_id,action,ok,message,created_at) VALUES (?,?,?,?,?,?)',[date('Y-m-d'),$postId,$action,$ok?1:0,mb_substr($msg,0,1000),date('c')]);
+}
+function autopilotDue(): bool {
+ return setting('autopilot_on')==='1'&&setting('autopilot_last')!==date('Y-m-d')&&(int)date('G')>=(int)setting('autopilot_hour','10');
+}
+// Works through the diagnosis, worst first, up to N posts a day. Each post is fixed at most once every 14 days.
+function runAutopilot(?int $max=null): array {
+ run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['autopilot_last',date('Y-m-d')]);
+ @set_time_limit(0);$max??=max(1,min(30,(int)setting('autopilot_posts','10')));
+ if(!aiAvailable()){autopilotLog('Skipped',null,false,'No AI is connected (Admin › SEO & Code › AI assistant).');return ['No AI connected'];}
+ $out=processAiQueue(5);$done=0;
+ $recent=array_flip(array_column(query("SELECT DISTINCT post_id FROM autopilot_log WHERE ok=1 AND post_id IS NOT NULL AND day>?",[date('Y-m-d',strtotime('-14 days'))]),'post_id'));
+ foreach(diagnosePosts() as $d){
+  if($done>=$max)break;
+  $id=(int)$d['post']['id'];$codes=array_column($d['issues'],1);
+  if(!$codes||isset($recent[$id]))continue;
+  $done++;$title='“'.$d['post']['title'].'”';
+  $steps=[];
+  if(in_array('cannibal',$codes,true))$steps[]=['New focus keyword',fn()=>fixCannibal($id)];
+  if(array_intersect(['orphan','invisible'],$codes))$steps[]=['Internal links',fn()=>linkOrphan($id)];
+  if(array_intersect(['analyser','thin','stale','page2','missing','ctr','cannibal-gsc'],$codes))$steps[]=['Content & SEO fixes',function()use($id){$f=generateFixes($id);return applyFixes($id,['meta'=>1,'tldr'=>1,'sections'=>array_keys($f['new_sections']??[]),'faq'=>array_keys($f['faq']??[])]);}];
+  foreach($steps as [$label,$fn]){
+   try{$msg=$fn();autopilotLog($label,$id,true,"$title: $msg");$out[]="$label $title: $msg";}
+   catch(Throwable $e){autopilotLog($label,$id,false,"$title: ".$e->getMessage());$out[]="$label $title failed: ".$e->getMessage();}
+  }
+ }
+ autopilotLog($done?'Summary':'Checked',null,true,$done?"Worked on $done post".($done===1?'':'s').' today.':'All posts are in good shape — nothing to fix today.');
+ return $out;
+}
+
 function undoRevision(int $revId): string {
  $r=query('SELECT * FROM post_revisions WHERE id=?',[$revId])[0]??null;if(!$r)throw new RuntimeException('Revision not found.');
  $cur=query('SELECT * FROM reviews WHERE id=?',[$r['post_id']])[0]??null;if(!$cur)throw new RuntimeException('The post no longer exists.');

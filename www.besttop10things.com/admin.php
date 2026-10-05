@@ -152,6 +152,11 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    $n=count($ids);$labels=['publish'=>'published','draft'=>'moved to drafts','trash'=>'moved to the Trash','restore'=>'restored from the Trash','delete'=>'permanently deleted'];
    flash("$n post".($n>1?'s':'')." {$labels[$do]}.",backTo('/admin.php?view=posts'));
   }
+  if($action==='ai_test'){
+   run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['ai_last_test',date('c')]);
+   try{$msg=aiTest();run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['ai_status','ok|'.$msg]);flash('✓ AI is working: '.$msg,'/admin.php?view=seo#ai');}
+   catch(Throwable $e){run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['ai_status','error|'.$e->getMessage()]);throw new RuntimeException('AI test failed: '.$e->getMessage());}
+  }
   if($action==='ai_key'){
    $save=fn($k,$v)=>run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,$v]);
    if(isset($_POST['ai_remove'])){@unlink(AI_KEY_FILE);@unlink(GEMINI_KEY_FILE);flash('AI keys removed.','/admin.php?view=seo#ai');}
@@ -164,7 +169,8 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    $gk=trim((string)($_POST['gemini_key']??''));if($gk!=='')geminiSaveKey($gk);
    if($prov==='gemini'&&geminiKey()==='')throw new RuntimeException('Paste your Gemini API key (aistudio.google.com › Get API key).');
    if($prov==='claude'&&aiKey()==='')throw new RuntimeException('Paste your Anthropic API key, or choose Google Gemini.');
-   flash('AI assistant settings saved ('.($prov==='gemini'?'Google Gemini':'Claude').').','/admin.php?view=seo#ai');
+   $save('ai_status','');
+   flash('AI assistant settings saved ('.($prov==='gemini'?'Google Gemini':'Claude').'). Now click “Test connection”.','/admin.php?view=seo#ai');
   }
   if($action==='merge_post'){
    $src=(int)($_POST['id']??0);$dst=(int)($_POST['into']??0);
@@ -901,7 +907,11 @@ if(!isset($titles[$view]))$view='dashboard';
    </div></section>
   </div>
   <section class="box" id="ai"><h2 class="box-title"><?= aicon('bulb','icon title-icon') ?> AI assistant</h2><div class="stack">
-   <?php if(aiAvailable()): ?><p><b class="chip chip-green">Connected · <?= aiProvider()==='gemini'?'Google Gemini ('.e(geminiModel()).')':'Claude' ?></b> Used by the Content Advisor for fixes, drafts and title rewrites.</p><?php endif ?>
+   <?php [$st,$stMsg]=array_pad(explode('|',setting('ai_status'),2),2,''); ?>
+   <?php if(!aiAvailable()): ?><p><b class="chip chip-amber">Not set up</b> Choose a provider, paste a key and save.</p>
+   <?php elseif($st==='ok'): ?><p><b class="chip chip-green">✓ Working</b> <?= e($stMsg) ?> <span class="muted">Tested <?= e(date('M j, g:i a',strtotime(setting('ai_last_test')))) ?></span></p>
+   <?php elseif($st==='error'): ?><p><b class="chip chip-red">✗ Not working</b> <?= e($stMsg) ?></p>
+   <?php else: ?><p><b class="chip chip-amber">Key saved — not tested yet</b> Click “Test connection”.</p><?php endif ?>
    <label>Provider<select class="input" name="ai_provider" form="ai-form"><option value="gemini" <?= aiProvider()==='gemini'?'selected':'' ?>>Google Gemini — free tier (key from aistudio.google.com)</option><option value="claude" <?= aiProvider()==='claude'?'selected':'' ?>>Claude — Anthropic API (paid, best quality)</option></select></label>
    <fieldset class="stack ai-fs"><legend>Google Gemini</legend>
     <label>Gemini API key <span class="muted">(aistudio.google.com › Get API key — free, no card)</span><input class="input" type="password" name="gemini_key" form="ai-form" autocomplete="off" placeholder="<?= geminiKey()!==''?'•••••••• saved (paste a new key to replace)':'AIza… or AQ.…' ?>"></label>
@@ -914,7 +924,7 @@ if(!isset($titles[$view]))$view='dashboard';
     <label>Workspace ID <span class="muted">(only if your key is not tied to a workspace; starts with wrkspc_)</span><input class="input" name="ai_workspace_id" form="ai-form" value="<?= e(setting('ai_workspace_id')) ?>" placeholder="wrkspc_…"></label>
    </fieldset>
    <p class="hint">Keys are stored outside the website folder. The AI only suggests changes and writes drafts; nothing is published without you.</p>
-   <div class="row-buttons"><button class="button button-primary" form="ai-form"><?= aicon('send') ?> Save</button><?php if(aiKey()!==''||geminiKey()!==''): ?><button class="button button-outline" form="ai-form" name="ai_remove" value="1">Remove keys</button><?php endif ?></div>
+   <div class="row-buttons"><button class="button button-primary" form="ai-form"><?= aicon('send') ?> Save</button><?php if(aiAvailable()): ?><button class="button button-outline" form="ai-test-form"><?= aicon('check') ?> Test connection</button><?php endif ?><?php if(aiKey()!==''||geminiKey()!==''): ?><button class="button button-outline" form="ai-form" name="ai_remove" value="1">Remove keys</button><?php endif ?></div>
   </div></section>
   <section class="box" id="pinterest"><h2 class="box-title"><?= aicon('send','icon title-icon') ?> Pinterest auto-posting</h2><div class="stack">
    <?php $boards=json_decode(setting('pinterest_boards'),true)?:[]; if(pinterestToken()!==''): ?><p><b class="chip chip-green">Connected</b> <?= count($boards) ?> board<?= count($boards)===1?'':'s' ?><?php if(setting('pinterest_board')!==''&&isset($boards[setting('pinterest_board')])): ?> · pinning to <b><?= e($boards[setting('pinterest_board')]) ?></b><?php endif ?></p><?php endif ?>
@@ -939,6 +949,7 @@ if(!isset($titles[$view]))$view='dashboard';
   </div></section>
   <div class="save-bar"><button class="button button-primary button-lg"><?= aicon('send') ?> Save SEO settings</button></div>
  </form>
+ <form id="ai-test-form" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="ai_test"></form>
  <form id="ai-form" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="ai_key"></form>
  <form id="pinterest-form" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="pinterest"></form>
  <form id="indexnow-all" method="post" class="hidden"><?= csrfField() ?><input type="hidden" name="action" value="indexnow_all"></form>

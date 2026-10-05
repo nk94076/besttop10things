@@ -197,6 +197,49 @@ function applyFixes(int $postId, array $parts): string {
  return 'Applied: '.implode(', ',$done).'.';
 }
 
+// "No in-article links point here": the fix lives in OTHER articles. Picks the 1–2 most related live posts
+// (same language, same category first, shared title words), has the AI write one natural sentence with a link
+// to the orphan, and inserts it at the end of the most fitting section. A revision is saved first (undo in History).
+function linkOrphan(int $targetId, int $max=2): string {
+ $t=query('SELECT * FROM reviews r WHERE r.id=? AND '.live(),[$targetId])[0]??null;
+ if(!$t)throw new RuntimeException('Post not found or not published.');
+ $url='/'.$t['slug'];$lang=detectLang($t['title'].' '.$t['body']);
+ $words=kwTokens($t['title'].' '.$t['focus_keyword']);
+ $cands=[];
+ foreach(query('SELECT * FROM reviews r WHERE r.id!=? AND '.live(),[$targetId]) as $p){
+  if(str_contains($p['body'],']('.$url.')')||str_contains($p['body'],'href="'.$url.'"')||detectLang($p['title'].' '.$p['body'])!==$lang)continue;
+  $tw=kwTokens($p['title'].' '.$p['focus_keyword']);
+  $cands[]=[($p['category_id']===$t['category_id']?3:0)+count(array_intersect($words,$tw)),$p];
+ }
+ usort($cands,fn($a,$b)=>$b[0]<=>$a[0]);
+ if(!$cands)throw new RuntimeException('No other published article in the same language to link from.');
+ $done=[];$errors=[];
+ $picked=array_merge([$cands[0]],array_filter(array_slice($cands,1,$max-1),fn($c)=>$c[0]>0));
+ foreach($picked as [,$p]){
+  $body=str_replace("\r",'',trim($p['body']));
+  preg_match_all('/^##\s+(.+)$/mu',$body,$hm);
+  $heads=array_values(array_filter(array_map('trim',$hm[1]),fn($h)=>!preg_match('/^(faqs?|frequently asked|häufig|questions fréquentes)/iu',$h)));
+  $prompt="You are adding ONE internal link to an existing article so readers discover a related article.\n\nExisting article: {$p['title']}\nIts sections:\n- ".implode("\n- ",$heads?:['(no sections)'])."\n\nArticle to link to: {$t['title']}\nIts URL: $url\nWhat it is about: ".mb_substr($t['tldr']?:$t['excerpt'],0,400).
+   "\n\nReturn:\n- section: the exact heading from the list above where a mention fits most naturally (empty string if none fits).\n- sentence: 1–2 natural sentences in the existing article's language that add value for the reader and contain exactly one Markdown link [descriptive anchor text]($url). The anchor must describe the topic (not \"click here\"/\"this article\"). No other links, no headings.";
+  try{$r=aiJson($prompt,aiObject(['section'=>['type'=>'string'],'sentence'=>['type'=>'string']],'orphanlink'),2000,'low');}
+  catch(RuntimeException $e){$errors[]=$e->getMessage();continue;}
+  $sentence=trim(preg_replace('/\[([^\]]+)\]\((?!'.preg_quote($url,'/').'\))[^)]*\)/u','$1',(string)($r['sentence']??'')));
+  if(!str_contains($sentence,']('.$url.')'))$sentence.=' Related: ['.$t['title'].']('.$url.').';
+  // End of the chosen section, else just before the FAQ/conclusion, else at the end.
+  $pos=null;$sec=trim((string)($r['section']??''));
+  if($sec!==''&&preg_match('/^##\s+'.preg_quote($sec,'/').'\s*$/mu',$body,$m,PREG_OFFSET_CAPTURE)){
+   $start=$m[0][1]+strlen($m[0][0]);$pos=preg_match('/^##\s/mu',$body,$n,PREG_OFFSET_CAPTURE,$start)?$n[0][1]:strlen($body);
+  }elseif(preg_match('/^##\s+(faqs?|frequently asked questions|final|conclusion|fazit|bottom line|in summary|verdict)/imu',$body,$m,PREG_OFFSET_CAPTURE))$pos=$m[0][1];
+  $new=$pos===null?$body."\n\n".$sentence:rtrim(substr($body,0,$pos))."\n\n".$sentence."\n\n".ltrim(substr($body,$pos));
+  saveRevision($p,'Before adding a link to “'.$t['title'].'”');
+  run('UPDATE reviews SET body=?,updated_at=? WHERE id=?',[trim($new)."\n",date('c'),$p['id']]);
+  indexNowPing([reviewUrl($p)]);
+  $done[]='“'.$p['title'].'”';
+ }
+ if(!$done)throw new RuntimeException('Could not add links: '.implode(' — ',$errors));
+ return 'Added a link to this post in '.implode(' and ',$done).'. Undo in History if needed.';
+}
+
 function undoRevision(int $revId): string {
  $r=query('SELECT * FROM post_revisions WHERE id=?',[$revId])[0]??null;if(!$r)throw new RuntimeException('Revision not found.');
  $cur=query('SELECT * FROM reviews WHERE id=?',[$r['post_id']])[0]??null;if(!$cur)throw new RuntimeException('The post no longer exists.');

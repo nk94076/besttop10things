@@ -28,4 +28,7 @@ if(aiAvailable()&&setting('advisor_weekly_fixes')==='1'){
   catch(Throwable $e){echo date('Y-m-d H:i ').'Auto-apply failed for #'.$sg['post_id'].': '.$e->getMessage()."\n";}
  }
 }
+// Fully automatic mode also links up to 3 orphan posts from related articles each week.
+if(aiAvailable()&&setting('advisor_auto_apply')==='1'){$n=0;foreach(diagnosePosts() as $d){if($n>=3)break;if(!in_array('orphan',array_column($d['issues'],1),true))continue;$n++;
+ try{echo date('Y-m-d H:i ').'Orphan #'.$d['post']['id'].': '.linkOrphan((int)$d['post']['id'])."\n";}catch(Throwable $e){echo date('Y-m-d H:i ').'Orphan #'.$d['post']['id'].' failed: '.$e->getMessage()."\n";}}}
 if(aiAvailable()&&setting('advisor_auto_meta')==='1')foreach(autoFixMeta() as $l)echo date('Y-m-d H:i ')."$l\n";

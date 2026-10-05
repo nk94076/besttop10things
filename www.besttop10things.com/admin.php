@@ -184,7 +184,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    indexNowPing(['/'.$a['slug'],'/'.$b['slug']]);
    flash('“'.$a['title'].'” now redirects (301) to “'.$b['title'].'” and was moved to the Trash. Copy any unique tips from it into the remaining post.','/admin.php?view=edit&id='.$dst);
   }
-  if(in_array($action,['advisor_settings','refresh_ideas','idea_status','idea_draft','ai_fixes','apply_fixes','discard_fixes','undo_revision'],true)){
+  if(in_array($action,['advisor_settings','refresh_ideas','idea_status','idea_draft','ai_fixes','apply_fixes','discard_fixes','undo_revision','link_orphan'],true)){
    $tab=(string)($_POST['tab']??'doctor');$back='/admin.php?view=advisor&tab='.rawurlencode($tab);
    if($action==='advisor_settings'){foreach(['advisor_weekly_fixes','advisor_auto_meta','advisor_auto_apply'] as $k)run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,isset($_POST[$k])?'1':'0']);flash('Content Advisor settings saved.',$back);}
    if($action==='refresh_ideas'){@set_time_limit(300);$n=refreshKeywordIdeas();flash("$n keyword ideas checked.",$back);}
@@ -196,6 +196,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     flash('The draft is being written in the background. Refresh this page in a minute.',$back);
    }
    if($action==='ai_fixes'){$pid=(int)($_POST['id']??0);queueFixes($pid);$log=processAiQueue(1);flash(($log?end($log):'Working on it… refresh in a minute.'),$back.'#post-'.$pid);}
+   if($action==='link_orphan'){@set_time_limit(300);$pid=(int)($_POST['id']??0);flash(linkOrphan($pid),$back.'#post-'.$pid);}
    if($action==='discard_fixes'){run('DELETE FROM ai_suggestions WHERE post_id=?',[(int)($_POST['id']??0)]);flash('Suggestion discarded.',$back);}
    if($action==='apply_fixes'){$pid=(int)($_POST['id']??0);flash(applyFixes($pid,['meta'=>isset($_POST['meta']),'tldr'=>isset($_POST['tldr']),'sections'=>(array)($_POST['sections']??[]),'faq'=>(array)($_POST['faq']??[])]).' You can undo it under History.',$back.'#post-'.$pid);}
    if($action==='undo_revision'){flash(undoRevision((int)($_POST['id']??0)),'/admin.php?view=advisor&tab=history');}
@@ -639,6 +640,7 @@ if(!isset($titles[$view]))$view='dashboard';
    <div class="doc-head"><div><a class="row-title" href="/admin.php?view=edit&id=<?= $p['id'] ?>"><?= e($p['title']) ?></a><br><span class="muted"><?= e($p['category']) ?> · SEO <?= $d['scores'][0] ?> · AI <?= $d['scores'][1] ?> · <a href="<?= e(reviewUrl($p)) ?>" target="_blank">view</a></span></div>
     <div class="row-buttons"><?php if($sg&&!empty($sg['pending'])): ?><span class="chip chip-amber">AI is working…</span><?php elseif(!$sg): ?><form method="post"><?= csrfField() ?><input type="hidden" name="action" value="ai_fixes"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="button button-primary button-sm" <?= $ai?'':'disabled' ?>><?= aicon('bulb') ?> Get AI fixes</button></form><?php endif ?></div></div>
    <ul class="check-list"><?php foreach($d['issues'] as $iss): [$sev,$code,$t,$detail]=$iss; ?><li class="<?= $sev>=3?'':'warn' ?>"><span><b><?= e($t) ?></b> — <?= e($detail) ?>
+    <?php if($code==='orphan'): ?><form method="post" class="merge-form"><?= csrfField() ?><input type="hidden" name="action" value="link_orphan"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="button button-outline button-sm" <?= $ai?'':'disabled' ?>><?= aicon('bulb') ?> Fix: add links to it with AI</button></form><?php endif ?>
     <?php if($code==='cannibal'&&!empty($iss[4])): ?><form method="post" class="merge-form" data-confirm="Move this post to the Trash and redirect its URL (301) to the selected post?"><?= csrfField() ?><input type="hidden" name="action" value="merge_post"><input type="hidden" name="id" value="<?= $p['id'] ?>"><select class="input input-sm" name="into" aria-label="Merge into"><?php foreach($iss[4] as $pid): ?><option value="<?= (int)$pid ?>"><?= e($ptitles[$pid]??("#".$pid)) ?></option><?php endforeach ?></select><button class="button button-outline button-sm">Merge into this post</button></form><?php endif ?>
    </span></li><?php endforeach ?></ul>
    <?php if($sg&&empty($sg['pending'])): ?>

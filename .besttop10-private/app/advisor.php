@@ -221,7 +221,7 @@ function writeDraft(int $ideaId): int {
   "- Do not mention specific product prices, specs, ratings or test results; give criteria and rules of thumb instead. Do not claim we tested anything.\n".
   "- Link naturally to 1–3 of these related articles on our site where relevant (use the exact Markdown links):\n".($related?implode("\n",$related):'(none yet)')."\n".
   "- title: an engaging H1 (max 70 characters). meta_title: 40–60 characters with the focus keyword. meta_description: 130–155 characters with the focus keyword. focus_keyword: the main 2–4 word phrase. excerpt: 1–2 sentences for article cards. tldr: 1–3 sentence quick answer (max 300 characters). takeaways: 3–5 short lines.";
- $d=aiJson($prompt,draftSchema(),32000);
+ $d=aiJson($prompt,draftSchema(),32000,'medium','draft');
  $slug=slug($d['title']);$base=$slug;$n=2;while(in_array($slug,RESERVED_SLUGS,true)||query('SELECT id FROM reviews WHERE slug=?',[$slug]))$slug=$base.'-'.$n++;
  $author=(query("SELECT author FROM reviews r WHERE ".live()." GROUP BY author ORDER BY COUNT(*) DESC LIMIT 1")[0]['author']??'Editorial team');
  run('INSERT INTO reviews(category_id,title,slug,excerpt,body,image,score,pros,cons,verdict,author,status,featured,demo,meta_title,meta_description,focus_keyword,tldr,takeaways,created_at,updated_at,published_at) VALUES (?,?,?,?,?,?,0,"","","",?,"draft",0,0,?,?,?,?,?,?,?,?)',

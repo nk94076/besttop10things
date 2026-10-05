@@ -14,11 +14,13 @@ function aiAvailable(): bool { return aiProvider()==='gemini'?geminiKey()!=='':(
 const GEMINI_KEY_FILE = ROOT . '/storage/gemini-key.txt';
 function geminiKey(): string { return (string)(getenv('GEMINI_API_KEY')?:(is_file(GEMINI_KEY_FILE)?trim((string)file_get_contents(GEMINI_KEY_FILE)):'')); }
 function geminiSaveKey(string $key): void {
- if(!preg_match('/^[A-Za-z0-9_\-]{30,60}$/',$key))throw new RuntimeException('That does not look like a Gemini API key (from aistudio.google.com › Get API key).');
+ if(!preg_match('/^[A-Za-z0-9_\-.]{30,120}$/',$key))throw new RuntimeException('That does not look like a Gemini API key (from aistudio.google.com › Get API key).');
  if(!is_dir(dirname(GEMINI_KEY_FILE)))mkdir(dirname(GEMINI_KEY_FILE),0750,true);
  file_put_contents(GEMINI_KEY_FILE,$key);@chmod(GEMINI_KEY_FILE,0600);
 }
-function geminiModel(): string { $m=setting('gemini_model');return preg_match('/^[a-z0-9.\-]{3,60}$/',$m)?$m:'gemini-2.5-flash'; }
+function geminiModel(): string { $m=setting('gemini_model');return preg_match('/^[a-z0-9.\-]{3,60}$/',$m)?$m:'gemini-flash-latest'; }
+// Tried in order when a model is busy (503), retired (404) or out of free quota (429).
+function geminiModels(): array { return array_values(array_unique([geminiModel(),'gemini-flash-latest','gemini-3.7-flash','gemini-3.5-flash','gemini-flash-lite-latest'])); }
 
 // Gemini's responseSchema is an OpenAPI subset: upper-case types, no additionalProperties/title.
 function geminiSchema(array $s): array {
@@ -33,13 +35,18 @@ function geminiJson(string $prompt, array $schema, int $maxTokens): array {
  unset($schema['title']);
  $body=['systemInstruction'=>['parts'=>[['text'=>AI_SYSTEM]]],'contents'=>[['role'=>'user','parts'=>[['text'=>$prompt]]]],
   'generationConfig'=>['responseMimeType'=>'application/json','responseSchema'=>geminiSchema($schema),'maxOutputTokens'=>max(8192,$maxTokens),'temperature'=>0.6]];
- $ch=curl_init((getenv('GEMINI_BASE_URL')?:'https://generativelanguage.googleapis.com').'/v1beta/models/'.rawurlencode(geminiModel()).':generateContent');
- curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>240,CURLOPT_CONNECTTIMEOUT=>10,
-  CURLOPT_HTTPHEADER=>['Content-Type: application/json','x-goog-api-key: '.geminiKey()],CURLOPT_POSTFIELDS=>json_encode($body,JSON_UNESCAPED_UNICODE)]);
- $raw=(string)curl_exec($ch);$code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);$err=curl_error($ch);curl_close($ch);
- $r=json_decode($raw,true);
- if($code===429)throw new RuntimeException('Gemini free-tier limit reached for now. It resets automatically; try again later (queued work is retried by the hourly cron).');
- if($code<200||$code>=300)throw new RuntimeException('Gemini API: '.($r['error']['message']??($err?:"HTTP $code")));
+ $last='';
+ foreach(geminiModels() as $model){
+  $ch=curl_init((getenv('GEMINI_BASE_URL')?:'https://generativelanguage.googleapis.com').'/v1beta/models/'.rawurlencode($model).':generateContent');
+  curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>240,CURLOPT_CONNECTTIMEOUT=>10,
+   CURLOPT_HTTPHEADER=>['Content-Type: application/json','x-goog-api-key: '.geminiKey()],CURLOPT_POSTFIELDS=>json_encode($body,JSON_UNESCAPED_UNICODE)]);
+  $raw=(string)curl_exec($ch);$code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);$err=curl_error($ch);curl_close($ch);
+  $r=json_decode($raw,true);
+  if(in_array($code,[404,429,500,503],true)){$last=$code===429?'Gemini free-tier limit reached for now. It resets automatically; queued work is retried by the hourly cron.':'Gemini is busy right now ('.($r['error']['message']??"HTTP $code").'). Try again in a few minutes.';continue;}
+  if($code<200||$code>=300)throw new RuntimeException('Gemini API: '.($r['error']['message']??($err?:"HTTP $code")));
+  $last='';break;
+ }
+ if($last!=='')throw new RuntimeException($last);
  if(!empty($r['promptFeedback']['blockReason']))throw new RuntimeException('Gemini declined this request ('.$r['promptFeedback']['blockReason'].').');
  $c=$r['candidates'][0]??[];
  if(($c['finishReason']??'')==='MAX_TOKENS')throw new RuntimeException('The AI answer was cut off. Try again.');

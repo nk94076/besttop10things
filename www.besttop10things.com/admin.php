@@ -156,7 +156,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    $save=fn($k,$v)=>run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,$v]);
    if(isset($_POST['ai_remove'])){@unlink(AI_KEY_FILE);@unlink(GEMINI_KEY_FILE);flash('AI keys removed.','/admin.php?view=seo#ai');}
    $prov=($_POST['ai_provider']??'')==='gemini'?'gemini':'claude';$save('ai_provider',$prov);
-   $gm=trim((string)($_POST['gemini_model']??''));if($gm!==''&&!preg_match('/^[a-z0-9.\-]{3,60}$/',$gm))throw new RuntimeException('Gemini model names look like gemini-2.5-flash.');$save('gemini_model',$gm);
+   $gm=trim((string)($_POST['gemini_model']??''));if($gm!==''&&!preg_match('/^[a-z0-9.\-]{3,60}$/',$gm))throw new RuntimeException('Gemini model names look like gemini-flash-latest.');$save('gemini_model',$gm);
    $ws=trim((string)($_POST['ai_workspace_id']??''));
    if($ws!==''&&!preg_match('/^wrkspc_[A-Za-z0-9]{10,60}$/',$ws))throw new RuntimeException('A workspace ID looks like wrkspc_… (Console › Settings › Workspaces).');
    $save('ai_workspace_id',$ws);
@@ -904,8 +904,8 @@ if(!isset($titles[$view]))$view='dashboard';
    <?php if(aiAvailable()): ?><p><b class="chip chip-green">Connected · <?= aiProvider()==='gemini'?'Google Gemini ('.e(geminiModel()).')':'Claude' ?></b> Used by the Content Advisor for fixes, drafts and title rewrites.</p><?php endif ?>
    <label>Provider<select class="input" name="ai_provider" form="ai-form"><option value="gemini" <?= aiProvider()==='gemini'?'selected':'' ?>>Google Gemini — free tier (key from aistudio.google.com)</option><option value="claude" <?= aiProvider()==='claude'?'selected':'' ?>>Claude — Anthropic API (paid, best quality)</option></select></label>
    <fieldset class="stack ai-fs"><legend>Google Gemini</legend>
-    <label>Gemini API key <span class="muted">(aistudio.google.com › Get API key — free, no card)</span><input class="input" type="password" name="gemini_key" form="ai-form" autocomplete="off" placeholder="<?= geminiKey()!==''?'•••••••• saved (paste a new key to replace)':'AIza…' ?>"></label>
-    <label>Model <span class="muted">(optional)</span><input class="input" name="gemini_model" form="ai-form" value="<?= e(setting('gemini_model')) ?>" placeholder="gemini-2.5-flash"></label>
+    <label>Gemini API key <span class="muted">(aistudio.google.com › Get API key — free, no card)</span><input class="input" type="password" name="gemini_key" form="ai-form" autocomplete="off" placeholder="<?= geminiKey()!==''?'•••••••• saved (paste a new key to replace)':'AIza… or AQ.…' ?>"></label>
+    <label>Model <span class="muted">(optional)</span><input class="input" name="gemini_model" form="ai-form" value="<?= e(setting('gemini_model')) ?>" placeholder="gemini-flash-latest"></label>
     <p class="hint">Free tier: limited requests per minute/day (enough for a few fixes and drafts a day). On the free tier Google may use what you send to improve its products — fine for public articles.</p>
    </fieldset>
    <fieldset class="stack ai-fs"><legend>Claude (Anthropic API)</legend>

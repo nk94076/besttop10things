@@ -153,13 +153,18 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    flash("$n post".($n>1?'s':'')." {$labels[$do]}.",backTo('/admin.php?view=posts'));
   }
   if($action==='ai_key'){
-   if(isset($_POST['ai_remove'])){@unlink(AI_KEY_FILE);flash('AI key removed.','/admin.php?view=seo#ai');}
+   $save=fn($k,$v)=>run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,$v]);
+   if(isset($_POST['ai_remove'])){@unlink(AI_KEY_FILE);@unlink(GEMINI_KEY_FILE);flash('AI keys removed.','/admin.php?view=seo#ai');}
+   $prov=($_POST['ai_provider']??'')==='gemini'?'gemini':'claude';$save('ai_provider',$prov);
+   $gm=trim((string)($_POST['gemini_model']??''));if($gm!==''&&!preg_match('/^[a-z0-9.\-]{3,60}$/',$gm))throw new RuntimeException('Gemini model names look like gemini-flash-latest.');$save('gemini_model',$gm);
    $ws=trim((string)($_POST['ai_workspace_id']??''));
    if($ws!==''&&!preg_match('/^wrkspc_[A-Za-z0-9]{10,60}$/',$ws))throw new RuntimeException('A workspace ID looks like wrkspc_… (Console › Settings › Workspaces).');
-   run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['ai_workspace_id',$ws]);
-   $key=trim((string)($_POST['anthropic_key']??''));
-   if($key!=='')aiSaveKey($key);elseif(aiKey()==='')throw new RuntimeException('Paste your Anthropic API key.');
-   flash('AI assistant settings saved.','/admin.php?view=seo#ai');
+   $save('ai_workspace_id',$ws);
+   $key=trim((string)($_POST['anthropic_key']??''));if($key!=='')aiSaveKey($key);
+   $gk=trim((string)($_POST['gemini_key']??''));if($gk!=='')geminiSaveKey($gk);
+   if($prov==='gemini'&&geminiKey()==='')throw new RuntimeException('Paste your Gemini API key (aistudio.google.com › Get API key).');
+   if($prov==='claude'&&aiKey()==='')throw new RuntimeException('Paste your Anthropic API key, or choose Google Gemini.');
+   flash('AI assistant settings saved ('.($prov==='gemini'?'Google Gemini':'Claude').').','/admin.php?view=seo#ai');
   }
   if($action==='merge_post'){
    $src=(int)($_POST['id']??0);$dst=(int)($_POST['into']??0);
@@ -173,7 +178,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   }
   if(in_array($action,['advisor_settings','refresh_ideas','idea_status','idea_draft','ai_fixes','apply_fixes','discard_fixes','undo_revision'],true)){
    $tab=(string)($_POST['tab']??'doctor');$back='/admin.php?view=advisor&tab='.rawurlencode($tab);
-   if($action==='advisor_settings'){foreach(['advisor_weekly_fixes','advisor_auto_meta'] as $k)run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,isset($_POST[$k])?'1':'0']);flash('Content Advisor settings saved.',$back);}
+   if($action==='advisor_settings'){foreach(['advisor_weekly_fixes','advisor_auto_meta','advisor_auto_apply'] as $k)run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,isset($_POST[$k])?'1':'0']);flash('Content Advisor settings saved.',$back);}
    if($action==='refresh_ideas'){@set_time_limit(300);$n=refreshKeywordIdeas();flash("$n keyword ideas checked.",$back);}
    if($action==='idea_status'){$st=(string)($_POST['status']??'');if(!in_array($st,['new','dismissed'],true))$st='new';run('UPDATE keyword_ideas SET status=? WHERE id=?',[$st,(int)($_POST['id']??0)]);flash($st==='dismissed'?'Idea hidden.':'Idea restored.',$back);}
    if($action==='idea_draft'){
@@ -616,8 +621,9 @@ if(!isset($titles[$view]))$view='dashboard';
   <section class="box"><h2 class="box-title"><?= aicon('gear','icon title-icon') ?> Automation</h2>
    <form method="post" class="stack"><?= csrfField() ?><input type="hidden" name="action" value="advisor_settings">
     <label class="check-row"><input type="checkbox" name="advisor_weekly_fixes" <?= setting('advisor_weekly_fixes')==='1'?'checked':'' ?>> Every week, prepare AI fixes for the 3 posts with the biggest problems (you still approve them here)</label>
+    <label class="check-row"><input type="checkbox" name="advisor_auto_apply" <?= setting('advisor_auto_apply')==='1'?'checked':'' ?>> <span><b>Fully automatic:</b> apply those weekly fixes without waiting for approval (new sections, FAQs, title, quick answer). A copy is saved first — check History each week and undo anything you don't like.</span></label>
     <label class="check-row"><input type="checkbox" name="advisor_auto_meta" <?= setting('advisor_auto_meta')==='1'?'checked':'' ?>> Automatically rewrite the SEO title &amp; description of pages with low click-through (max. once a month per page, undo in History)</label>
-    <p class="hint">Runs from <code>scripts/content-advisor.php</code> (add it to cron hourly). Article text is never changed automatically.</p>
+    <p class="hint">Runs from <code>scripts/content-advisor.php</code> (cron, hourly). Article text only changes automatically if “Fully automatic” is on.</p>
     <div><button class="button button-primary">Save</button></div></form></section>
  <?php elseif($tab==='ideas'): $status=in_array($_GET['status']??'',['new','covered','drafted','dismissed'],true)?$_GET['status']:'new';
   $ideas=query('SELECT k.*,c.name AS cat,r.title AS ptitle FROM keyword_ideas k LEFT JOIN categories c ON c.id=k.category_id LEFT JOIN reviews r ON r.id=k.post_id WHERE k.status'.($status==='new'?" IN ('new','queued')":'=?').' ORDER BY k.score DESC,k.impressions DESC LIMIT 150',$status==='new'?[]:[$status]); ?>
@@ -894,12 +900,21 @@ if(!isset($titles[$view]))$view='dashboard';
     <p class="hint">For Google: submit <code><?= e($base) ?>/sitemap.xml</code> in Search Console → Sitemaps, and use URL Inspection → Request indexing for new posts.</p>
    </div></section>
   </div>
-  <section class="box" id="ai"><h2 class="box-title"><?= aicon('bulb','icon title-icon') ?> AI assistant (Claude)</h2><div class="stack">
-   <?php if(aiAvailable()): ?><p><b class="chip chip-green">Connected</b> Used by the Content Advisor for article fixes, drafts and title rewrites.</p><?php elseif(!is_file(ROOT.'/vendor/autoload.php')): ?><p class="notice notice-error">Not installed yet. On the server run: <code>cd .besttop10-private &amp;&amp; composer install --no-dev</code></p><?php endif ?>
-   <label>Anthropic API key <span class="muted">(console.anthropic.com › API keys; usage is billed to your Anthropic account)</span><input class="input" type="password" name="anthropic_key" form="ai-form" autocomplete="off" placeholder="<?= aiKey()!==''?'•••••••• saved (paste a new key to replace)':'sk-ant-…' ?>"></label>
-   <label>Workspace ID <span class="muted">(only if your key is not tied to a workspace; Console › Settings › Workspaces, starts with wrkspc_)</span><input class="input" name="ai_workspace_id" form="ai-form" value="<?= e(setting('ai_workspace_id')) ?>" placeholder="wrkspc_…"></label>
-   <p class="hint">Stored outside the website folder. The AI only suggests changes and writes drafts; nothing is published without you.</p>
-   <div class="row-buttons"><button class="button button-primary" form="ai-form"><?= aicon('send') ?> Save</button><?php if(aiKey()!==''): ?><button class="button button-outline" form="ai-form" name="ai_remove" value="1">Remove</button><?php endif ?></div>
+  <section class="box" id="ai"><h2 class="box-title"><?= aicon('bulb','icon title-icon') ?> AI assistant</h2><div class="stack">
+   <?php if(aiAvailable()): ?><p><b class="chip chip-green">Connected · <?= aiProvider()==='gemini'?'Google Gemini ('.e(geminiModel()).')':'Claude' ?></b> Used by the Content Advisor for fixes, drafts and title rewrites.</p><?php endif ?>
+   <label>Provider<select class="input" name="ai_provider" form="ai-form"><option value="gemini" <?= aiProvider()==='gemini'?'selected':'' ?>>Google Gemini — free tier (key from aistudio.google.com)</option><option value="claude" <?= aiProvider()==='claude'?'selected':'' ?>>Claude — Anthropic API (paid, best quality)</option></select></label>
+   <fieldset class="stack ai-fs"><legend>Google Gemini</legend>
+    <label>Gemini API key <span class="muted">(aistudio.google.com › Get API key — free, no card)</span><input class="input" type="password" name="gemini_key" form="ai-form" autocomplete="off" placeholder="<?= geminiKey()!==''?'•••••••• saved (paste a new key to replace)':'AIza… or AQ.…' ?>"></label>
+    <label>Model <span class="muted">(optional)</span><input class="input" name="gemini_model" form="ai-form" value="<?= e(setting('gemini_model')) ?>" placeholder="gemini-flash-latest"></label>
+    <p class="hint">Free tier: limited requests per minute/day (enough for a few fixes and drafts a day). On the free tier Google may use what you send to improve its products — fine for public articles.</p>
+   </fieldset>
+   <fieldset class="stack ai-fs"><legend>Claude (Anthropic API)</legend>
+    <?php if(!is_file(ROOT.'/vendor/autoload.php')): ?><p class="notice notice-error">Claude needs the SDK: on the server run <code>cd .besttop10-private &amp;&amp; composer install --no-dev</code></p><?php endif ?>
+    <label>Anthropic API key <span class="muted">(console.anthropic.com › API keys; billed per use)</span><input class="input" type="password" name="anthropic_key" form="ai-form" autocomplete="off" placeholder="<?= aiKey()!==''?'•••••••• saved (paste a new key to replace)':'sk-ant-…' ?>"></label>
+    <label>Workspace ID <span class="muted">(only if your key is not tied to a workspace; starts with wrkspc_)</span><input class="input" name="ai_workspace_id" form="ai-form" value="<?= e(setting('ai_workspace_id')) ?>" placeholder="wrkspc_…"></label>
+   </fieldset>
+   <p class="hint">Keys are stored outside the website folder. The AI only suggests changes and writes drafts; nothing is published without you.</p>
+   <div class="row-buttons"><button class="button button-primary" form="ai-form"><?= aicon('send') ?> Save</button><?php if(aiKey()!==''||geminiKey()!==''): ?><button class="button button-outline" form="ai-form" name="ai_remove" value="1">Remove keys</button><?php endif ?></div>
   </div></section>
   <section class="box" id="pinterest"><h2 class="box-title"><?= aicon('send','icon title-icon') ?> Pinterest auto-posting</h2><div class="stack">
    <?php $boards=json_decode(setting('pinterest_boards'),true)?:[]; if(pinterestToken()!==''): ?><p><b class="chip chip-green">Connected</b> <?= count($boards) ?> board<?= count($boards)===1?'':'s' ?><?php if(setting('pinterest_board')!==''&&isset($boards[setting('pinterest_board')])): ?> · pinning to <b><?= e($boards[setting('pinterest_board')]) ?></b><?php endif ?></p><?php endif ?>

@@ -7,5 +7,5 @@
         "anthropic-ai/sdk": "^0.54",
         "guzzlehttp/guzzle": "^7.8"
     },
-    "config": { "optimize-autoloader": true, "sort-packages": true }
+    "config": { "optimize-autoloader": true, "sort-packages": true, "allow-plugins": { "php-http/discovery": true } }
 }

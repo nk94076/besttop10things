@@ -150,7 +150,12 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   }
   if($action==='ai_key'){
    if(isset($_POST['ai_remove'])){@unlink(AI_KEY_FILE);flash('AI key removed.','/admin.php?view=seo#ai');}
-   aiSaveKey(trim((string)($_POST['anthropic_key']??'')));flash('AI assistant connected.','/admin.php?view=seo#ai');
+   $ws=trim((string)($_POST['ai_workspace_id']??''));
+   if($ws!==''&&!preg_match('/^wrkspc_[A-Za-z0-9]{10,60}$/',$ws))throw new RuntimeException('A workspace ID looks like wrkspc_… (Console › Settings › Workspaces).');
+   run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['ai_workspace_id',$ws]);
+   $key=trim((string)($_POST['anthropic_key']??''));
+   if($key!=='')aiSaveKey($key);elseif(aiKey()==='')throw new RuntimeException('Paste your Anthropic API key.');
+   flash('AI assistant settings saved.','/admin.php?view=seo#ai');
   }
   if(in_array($action,['advisor_settings','refresh_ideas','idea_status','idea_draft','ai_fixes','apply_fixes','discard_fixes','undo_revision'],true)){
    $tab=(string)($_POST['tab']??'doctor');$back='/admin.php?view=advisor&tab='.rawurlencode($tab);
@@ -874,8 +879,9 @@ if(!isset($titles[$view]))$view='dashboard';
   <section class="box" id="ai"><h2 class="box-title"><?= aicon('bulb','icon title-icon') ?> AI assistant (Claude)</h2><div class="stack">
    <?php if(aiAvailable()): ?><p><b class="chip chip-green">Connected</b> Used by the Content Advisor for article fixes, drafts and title rewrites.</p><?php elseif(!is_file(ROOT.'/vendor/autoload.php')): ?><p class="notice notice-error">Not installed yet. On the server run: <code>cd .besttop10-private &amp;&amp; composer install --no-dev</code></p><?php endif ?>
    <label>Anthropic API key <span class="muted">(console.anthropic.com › API keys; usage is billed to your Anthropic account)</span><input class="input" type="password" name="anthropic_key" form="ai-form" autocomplete="off" placeholder="<?= aiKey()!==''?'•••••••• saved (paste a new key to replace)':'sk-ant-…' ?>"></label>
+   <label>Workspace ID <span class="muted">(only if your key is not tied to a workspace; Console › Settings › Workspaces, starts with wrkspc_)</span><input class="input" name="ai_workspace_id" form="ai-form" value="<?= e(setting('ai_workspace_id')) ?>" placeholder="wrkspc_…"></label>
    <p class="hint">Stored outside the website folder. The AI only suggests changes and writes drafts; nothing is published without you.</p>
-   <div class="row-buttons"><button class="button button-primary" form="ai-form"><?= aicon('send') ?> Save key</button><?php if(aiKey()!==''): ?><button class="button button-outline" form="ai-form" name="ai_remove" value="1">Remove</button><?php endif ?></div>
+   <div class="row-buttons"><button class="button button-primary" form="ai-form"><?= aicon('send') ?> Save</button><?php if(aiKey()!==''): ?><button class="button button-outline" form="ai-form" name="ai_remove" value="1">Remove</button><?php endif ?></div>
   </div></section>
   <section class="box" id="pinterest"><h2 class="box-title"><?= aicon('send','icon title-icon') ?> Pinterest auto-posting</h2><div class="stack">
    <?php $boards=json_decode(setting('pinterest_boards'),true)?:[]; if(pinterestToken()!==''): ?><p><b class="chip chip-green">Connected</b> <?= count($boards) ?> board<?= count($boards)===1?'':'s' ?><?php if(setting('pinterest_board')!==''&&isset($boards[setting('pinterest_board')])): ?> · pinning to <b><?= e($boards[setting('pinterest_board')]) ?></b><?php endif ?></p><?php endif ?>

@@ -48,6 +48,7 @@ function aiJson(string $prompt, array $schema, int $maxTokens=16000, string $eff
    outputConfig: ['effort'=>$effort,'format'=>['type'=>'json_schema','schema'=>$schema]],
    system: AI_SYSTEM,
    betas: ['server-side-fallback-2026-07-01'],
+   workspaceID: setting('ai_workspace_id')!==''?setting('ai_workspace_id'):null,
   );
  }catch(\Anthropic\Core\Exceptions\APIStatusException $e){
   $detail=preg_match('/"message":\s*"([^"]+)"/',$e->getMessage(),$m)?$m[1]:'request failed';

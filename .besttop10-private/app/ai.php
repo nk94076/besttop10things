@@ -9,7 +9,7 @@ const AI_MODEL = 'claude-opus-5-5';
 
 // Provider: 'claude' (Anthropic API, paid) or 'gemini' (Google AI Studio key; has a free tier).
 function aiProvider(): string { return setting('ai_provider')==='gemini'?'gemini':'claude'; }
-function aiAvailable(): bool { return aiProvider()==='gemini'?geminiKey()!=='':(is_file(ROOT.'/vendor/autoload.php')&&aiKey()!==''); }
+function aiAvailable(): bool { return geminiKey()!==''||(is_file(ROOT.'/vendor/autoload.php')&&aiKey()!==''); }
 
 const GEMINI_KEY_FILE = ROOT . '/storage/gemini-key.txt';
 function geminiKey(): string { return (string)(getenv('GEMINI_API_KEY')?:(is_file(GEMINI_KEY_FILE)?trim((string)file_get_contents(GEMINI_KEY_FILE)):'')); }
@@ -81,11 +81,34 @@ Rules:
 - Prefer short paragraphs, direct answers first, question-style headings where natural, and concrete, actionable steps.";
 
 // One structured call. $schema is a JSON schema; returns the decoded object.
-function aiJson(string $prompt, array $schema, int $maxTokens=16000, string $effort='medium'): array {
+// Which providers have a key (and, for Claude, the SDK).
+function claudeReady(): bool { return is_file(ROOT.'/vendor/autoload.php')&&aiKey()!==''; }
+function geminiReady(): bool { return geminiKey()!==''; }
+function providerReady(string $p): bool { return $p==='gemini'?geminiReady():claudeReady(); }
+function providerName(string $p): string { return $p==='gemini'?'Google Gemini':'Claude'; }
+// Order to try for a task: the chosen provider first, then the other one as backup (if enabled and set up).
+function aiOrder(string $task='general'): array {
+ $first=$task==='draft'&&in_array(setting('ai_draft_provider'),['gemini','claude'],true)?setting('ai_draft_provider'):aiProvider();
+ $order=[$first];if(setting('ai_fallback','1')==='1')$order[]=$first==='gemini'?'claude':'gemini';
+ return array_values(array_filter($order,'providerReady'));
+}
+
+// One structured call. $schema is a JSON schema; returns the decoded object. $task 'draft' may use its own provider.
+function aiJson(string $prompt, array $schema, int $maxTokens=16000, string $effort='medium', string $task='general', ?string $only=null): array {
  if($mock=getenv('AI_MOCK_DIR')){ // tests: fixture named after the schema's title
   $f=$mock.'/'.($schema['title']??'out').'.json';if(!is_file($f))throw new RuntimeException("No AI mock $f");return json_decode((string)file_get_contents($f),true);
  }
- if(aiProvider()==='gemini')return geminiJson($prompt,$schema,$maxTokens);
+ $order=$only?[$only]:aiOrder($task);
+ if(!$order)throw new RuntimeException('No AI is set up yet: add a Gemini or Claude key in Admin › SEO & Code › AI assistant.');
+ $errors=[];
+ foreach($order as $prov){
+  try{$r=$prov==='gemini'?geminiJson($prompt,$schema,$maxTokens):claudeJson($prompt,$schema,$maxTokens,$effort);$GLOBALS['aiProviderUsed']=$prov;return $r;}
+  catch(RuntimeException $e){$errors[]=$e->getMessage();}
+ }
+ throw new RuntimeException(implode(' — then: ',$errors));
+}
+
+function claudeJson(string $prompt, array $schema, int $maxTokens, string $effort): array {
  $title=$schema['title']??null;unset($schema['title']);
  try{
   $msg=aiClient()->beta->messages->create(
@@ -109,7 +132,7 @@ function aiJson(string $prompt, array $schema, int $maxTokens=16000, string $eff
  if($msg->stopReason==='max_tokens')throw new RuntimeException('The AI answer was cut off. Try again.');
  $text='';foreach($msg->content as $block)if($block->type==='text')$text.=$block->text;
  $data=json_decode($text,true);
- if(!is_array($data))throw new RuntimeException('The AI returned an unreadable answer'.($title?" ($title)":'').'. Try again.');
+ if(!is_array($data))throw new RuntimeException('Claude returned an unreadable answer'.($title?" ($title)":'').'. Try again.');
  return $data;
 }
 
@@ -119,9 +142,10 @@ function aiObject(array $props, ?string $title=null): array {
 }
 
 // Tiny request to prove the key and provider work. Returns a human-readable status.
-function aiTest(): string {
+function aiTest(string $prov): string {
+ if(!providerReady($prov))throw new RuntimeException($prov==='gemini'?'No Gemini key saved.':(is_file(ROOT.'/vendor/autoload.php')?'No Claude key saved.':'Claude SDK not installed (composer install --no-dev).'));
  $t=microtime(true);
- $r=aiJson('Reply with ok = true.',aiObject(['ok'=>['type'=>'boolean']],'test'),200,'low');
- if(empty($r['ok']))throw new RuntimeException('The AI answered, but not as expected. Try again.');
- return (aiProvider()==='gemini'?'Google Gemini ('.($GLOBALS['aiModelUsed']??geminiModel()).')':'Claude').' answered in '.round(microtime(true)-$t,1).'s.';
+ $r=aiJson('Reply with ok = true.',aiObject(['ok'=>['type'=>'boolean']],'test'),200,'low','general',$prov);
+ if(empty($r['ok']))throw new RuntimeException('It answered, but not as expected. Try again.');
+ return ($prov==='gemini'?'Gemini ('.($GLOBALS['aiModelUsed']??geminiModel()).')':'Claude ('.AI_MODEL.')').' answered in '.round(microtime(true)-$t,1).'s';
 }

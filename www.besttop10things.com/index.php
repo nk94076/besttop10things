@@ -41,6 +41,7 @@ elseif(preg_match('~^/category/([a-z0-9-]+)$~',$path,$m)){$page='reviews';$_GET[
 elseif(preg_match('~^/author/([a-z0-9-]+)$~',$path,$m)){$page='author';$_GET['author']=$m[1];}
 elseif(preg_match('~^/([a-z0-9-]+)$~',$path,$m)){$page='review';$_GET['slug']=$m[1];}
 else $page='404';
+if($page==='404'&&($to=redirectFor($path))){header('Location: '.$to,true,301);exit;}
 if($page==='404')http_response_code(404);
 
 if($page==='robots'){
@@ -110,6 +111,7 @@ $cats=categories();
 $shownCats=array_values(array_filter($cats,fn($c)=>(int)$c['total']>0)); // public lists only show categories with live posts
 if ($page==='review') {
  $review=query($join.'WHERE r.slug=? AND '.(isset($_SESSION['admin'],$_GET['preview'])?"r.status!='trash'":live()),[(string)($_GET['slug']??'')])[0]??null;
+ if(!$review&&($to=redirectFor($path))){header('Location: '.$to,true,301);exit;}
  if(!$review) { http_response_code(404); $page='404'; }
 }
 if($page==='author'){$authorRow=query('SELECT * FROM authors WHERE slug=?',[(string)($_GET['author']??'')])[0]??null;if(!$authorRow){http_response_code(404);$page='404';}}

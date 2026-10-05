@@ -94,7 +94,11 @@ function savePost(array $in, int $id): int {
  $cols='category_id=?,title=?,slug=?,excerpt=?,body=?,image=?,score=?,pros=?,cons=?,verdict=?,author=?,status=?,featured=?,demo=?,meta_title=?,meta_description=?,brand=?,brand_about=?,cta_url=?,focus_keyword=?,seo_canonical=?,seo_robots=?,og_image=?,schema_type=?,tldr=?,takeaways=?,custom_schema=?,published_at=?,updated_at=?';
  if($id){
   if(!query('SELECT id FROM reviews WHERE id=?',[$id]))throw new RuntimeException('Post not found.');
-  run("UPDATE reviews SET $cols WHERE id=?",[...$values,$id]);return $id;
+  $before=query('SELECT slug,status FROM reviews WHERE id=?',[$id])[0];
+  run("UPDATE reviews SET $cols WHERE id=?",[...$values,$id]);
+  // A published post that changes its URL keeps its old links working (and its Google ranking).
+  if($before['slug']!==$slug&&$before['status']==='published')addRedirect('/'.$before['slug'],'/'.$slug);
+  return $id;
  }
  run('INSERT INTO reviews(category_id,title,slug,excerpt,body,image,score,pros,cons,verdict,author,status,featured,demo,meta_title,meta_description,brand,brand_about,cta_url,focus_keyword,seo_canonical,seo_robots,og_image,schema_type,tldr,takeaways,custom_schema,published_at,updated_at,created_at) VALUES ('.implode(',',array_fill(0,30,'?')).')',[...$values,date('c')]);
  return (int)db()->lastInsertId();
@@ -156,6 +160,16 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    $key=trim((string)($_POST['anthropic_key']??''));
    if($key!=='')aiSaveKey($key);elseif(aiKey()==='')throw new RuntimeException('Paste your Anthropic API key.');
    flash('AI assistant settings saved.','/admin.php?view=seo#ai');
+  }
+  if($action==='merge_post'){
+   $src=(int)($_POST['id']??0);$dst=(int)($_POST['into']??0);
+   $a=query('SELECT id,slug,title FROM reviews WHERE id=?',[$src])[0]??null;$b=query('SELECT id,slug,title FROM reviews WHERE id=? AND '.str_replace('r.','',live()),[$dst])[0]??null;
+   if(!$a||!$b||$src===$dst)throw new RuntimeException('Choose a different, published post to merge into.');
+   saveRevision(query('SELECT * FROM reviews WHERE id=?',[$src])[0],'Merged into: '.$b['title']);
+   run("UPDATE reviews SET status='trash',updated_at=? WHERE id=?",[date('c'),$src]);
+   addRedirect('/'.$a['slug'],'/'.$b['slug']);
+   indexNowPing(['/'.$a['slug'],'/'.$b['slug']]);
+   flash('“'.$a['title'].'” now redirects (301) to “'.$b['title'].'” and was moved to the Trash. Copy any unique tips from it into the remaining post.','/admin.php?view=edit&id='.$dst);
   }
   if(in_array($action,['advisor_settings','refresh_ideas','idea_status','idea_draft','ai_fixes','apply_fixes','discard_fixes','undo_revision'],true)){
    $tab=(string)($_POST['tab']??'doctor');$back='/admin.php?view=advisor&tab='.rawurlencode($tab);
@@ -577,12 +591,16 @@ if(!isset($titles[$view]))$view='dashboard';
  <?php if(!$ai): ?><p class="notice">AI fixes and drafts need the AI assistant: <a href="/admin.php?view=seo#ai">connect it in SEO &amp; Code</a>. The diagnosis and keyword ideas work without it.</p><?php endif ?>
  <?php if(!gscKey()): ?><p class="notice">Connect <a href="/admin.php?view=search">Search Console</a> to add ranking data (missing searches, page-2 pages, low click-through) to the diagnosis.</p><?php endif ?>
  <?php if($tab==='doctor'): $diag=array_filter(diagnosePosts(),fn($d)=>$d['issues']); $sugs=[];foreach(query('SELECT * FROM ai_suggestions') as $x)$sugs[$x['post_id']]=json_decode($x['data'],true); ?>
-  <p class="muted"><?= count($diag) ?> published post<?= count($diag)===1?'':'s' ?> with something to improve, most important first.</p>
-  <?php foreach(array_slice($diag,0,40) as $d): $p=$d['post'];$sg=$sugs[$p['id']]??null; ?>
+  <?php foreach($GLOBALS['advisorSite']??[] as [$code,$t,$detail]): ?><section class="box site-note"><h2 class="box-title"><?= aicon('search','icon title-icon') ?> <?= e($t) ?></h2><p><?= e($detail) ?></p><p><a class="button button-outline button-sm" href="/admin.php?view=search">Open Search Console report</a></p></section><?php endforeach ?>
+  <?php $all=isset($_GET['all']);$ptitles=[];foreach(query("SELECT id,title FROM reviews r WHERE ".live()) as $t)$ptitles[$t["id"]]=$t["title"]; ?>
+  <p class="muted"><?= count($diag) ?> published post<?= count($diag)===1?'':'s' ?> with something to improve, most important first.<?= !$all&&count($diag)>15?' Showing the top 15 · <a href="/admin.php?view=advisor&tab=doctor&all=1">show all</a>':'' ?></p>
+  <?php foreach(array_slice($diag,0,$all?200:15) as $d): $p=$d['post'];$sg=$sugs[$p['id']]??null; ?>
   <section class="box doc-card" id="post-<?= $p['id'] ?>">
    <div class="doc-head"><div><a class="row-title" href="/admin.php?view=edit&id=<?= $p['id'] ?>"><?= e($p['title']) ?></a><br><span class="muted"><?= e($p['category']) ?> · SEO <?= $d['scores'][0] ?> · AI <?= $d['scores'][1] ?> · <a href="<?= e(reviewUrl($p)) ?>" target="_blank">view</a></span></div>
     <div class="row-buttons"><?php if($sg&&!empty($sg['pending'])): ?><span class="chip chip-amber">AI is working…</span><?php elseif(!$sg): ?><form method="post"><?= csrfField() ?><input type="hidden" name="action" value="ai_fixes"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="button button-primary button-sm" <?= $ai?'':'disabled' ?>><?= aicon('bulb') ?> Get AI fixes</button></form><?php endif ?></div></div>
-   <ul class="check-list"><?php foreach($d['issues'] as [$sev,$code,$t,$detail]): ?><li class="<?= $sev>=3?'':'warn' ?>"><span><b><?= e($t) ?></b> — <?= e($detail) ?></span></li><?php endforeach ?></ul>
+   <ul class="check-list"><?php foreach($d['issues'] as $iss): [$sev,$code,$t,$detail]=$iss; ?><li class="<?= $sev>=3?'':'warn' ?>"><span><b><?= e($t) ?></b> — <?= e($detail) ?>
+    <?php if($code==='cannibal'&&!empty($iss[4])): ?><form method="post" class="merge-form" data-confirm="Move this post to the Trash and redirect its URL (301) to the selected post?"><?= csrfField() ?><input type="hidden" name="action" value="merge_post"><input type="hidden" name="id" value="<?= $p['id'] ?>"><select class="input input-sm" name="into" aria-label="Merge into"><?php foreach($iss[4] as $pid): ?><option value="<?= (int)$pid ?>"><?= e($ptitles[$pid]??("#".$pid)) ?></option><?php endforeach ?></select><button class="button button-outline button-sm">Merge into this post</button></form><?php endif ?>
+   </span></li><?php endforeach ?></ul>
    <?php if($sg&&empty($sg['pending'])): ?>
     <form method="post" class="fix-box"><?= csrfField() ?><input type="hidden" name="action" value="apply_fixes"><input type="hidden" name="id" value="<?= $p['id'] ?>">
      <p class="lbl"><?= aicon('bulb') ?> AI suggestion</p><p><?= e($sg['summary']) ?></p>

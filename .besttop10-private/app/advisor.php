@@ -88,7 +88,11 @@ function diagnosePosts(): array {
   foreach(gscQuery(['query','page'],date('Y-m-d',strtotime('-30 days')),date('Y-m-d',strtotime('-2 days')),5000) as $r){
    $p=postForUrl($r['keys'][1]);if(!$p)continue;$byPage[$p['id']][]=$r;$byQuery[mb_strtolower($r['keys'][0])][$p['id']]=$r;
   }$gscOn=true;}catch(Throwable){}}
- $fk=[];foreach($posts as $p)if(trim($p['focus_keyword'])!=='')$fk[mb_strtolower(trim($p['focus_keyword']))][]=$p['id'];
+ // Same keyword only competes within the same language.
+ $lang=[];$fk=[];foreach($posts as $p){$lang[$p['id']]=detectLang($p['title'].' '.$p['body']);if(trim($p['focus_keyword'])!=='')$fk[mb_strtolower(trim($p['focus_keyword'])).'|'.$lang[$p['id']]][]=(int)$p['id'];}
+ // In-article links pointing at each post: written links plus the automatic keyword links.
+ $inbound=[];foreach($posts as $p){preg_match_all('~(?:\]\(|href=")/([a-z0-9-]+)~',$p['body'].autoLinks(e($p['body']),(int)$p['id'],(int)$p['category_id']),$lm);foreach(array_unique($lm[1]) as $sl)if($sl!==$p['slug'])$inbound[$sl]=($inbound[$sl]??0)+1;}
+ $site=[];$invisible=0;$eligible=0;
  $out=[];
  foreach($posts as $p){
   $iss=[];$id=(int)$p['id'];$age=(time()-strtotime((string)($p['published_at']??$p['created_at'])))/86400;
@@ -98,12 +102,14 @@ function diagnosePosts(): array {
   if($wc<800)$iss[]=[2,'thin',"Short article ($wc words)",'Competing pages usually cover the topic in more depth. Add sections that answer related questions, with practical steps and examples.'];
   $upd=(time()-strtotime((string)$p['updated_at']))/86400;
   if($upd>180)$iss[]=[1,'stale','Not updated for '.round($upd).' days','Refresh facts, availability and the year in the title where relevant; Google favours recently maintained guides.'];
-  if(!str_contains($bodies,'](/'.$p['slug'].')')&&!str_contains($bodies,'href="/'.$p['slug'].'"'))$iss[]=[2,'orphan','No other article links here','Internal links help Google find and value this page. Link to it from 2–3 related articles (the automatic links only cover focus keywords).'];
+  if(empty($inbound[$p['slug']]))$iss[]=[1,'orphan','No in-article links point here','It is linked from its category hub and the “Related” sidebar, but no article mentions it in the text. Add a sentence with a link to it in 1–2 related articles.'];
   $kw=mb_strtolower(trim($p['focus_keyword']));
-  if($kw!==''&&count($fk[$kw]??[])>1)$iss[]=[3,'cannibal','Shares its focus keyword with another post','Two pages targeting "'.$kw.'" compete with each other. Merge them or give each a different keyword.'];
+  $peers=$kw!==''?array_values(array_diff($fk[$kw.'|'.$lang[$id]]??[],[$id])):[];
+  if($peers)$iss[]=[3,'cannibal','Same focus keyword as '.count($peers).' other post'.(count($peers)>1?'s':''),'Pages targeting "'.$kw.'" compete with each other in Google, so both rank lower. Merge this post into the stronger one (301 redirect), or give it a different focus keyword.',$peers];
   if($gscOn){
    $rows=$byPage[$id]??[];$impr=array_sum(array_column($rows,'impressions'));
-   if(!$rows&&$age>21)$iss[]=[3,'invisible','No Google impressions in 30 days','Google is not showing this page at all. Check it in Search Console › URL Inspection (is it indexed?), add internal links to it, and make the focus keyword more specific (long-tail).'];
+   if($age>21)$eligible++;
+   if(!$rows&&$age>21){$invisible++;$iss[]=[3,'invisible','No Google impressions in 30 days','Google is not showing this page at all. Check it in Search Console › URL Inspection (is it indexed?), add internal links to it, and make the focus keyword more specific (long-tail).'];}
    if($rows){
     $avg=array_sum(array_map(fn($r)=>$r['position']*$r['impressions'],$rows))/max(1,$impr);
     if($avg>10&&$avg<=30)$iss[]=[2,'page2','Ranking on page 2–3 (avg. position '.round($avg,1).')','Close to page 1: expand the sections that match the searches below, add FAQs and internal links.'];
@@ -118,6 +124,12 @@ function diagnosePosts(): array {
   $out[]=['post'=>$p,'issues'=>$iss,'priority'=>array_sum(array_column($iss,0)),'missing'=>$missing??[],'scores'=>[$s1,$s2]];
   unset($missing);
  }
+ // When most pages have no impressions it is a site-wide indexing problem: report it once, not per post.
+ if($gscOn&&$eligible>=5&&$invisible>=$eligible*0.5){
+  foreach($out as &$o){$o['issues']=array_values(array_filter($o['issues'],fn($i)=>$i[1]!=='invisible'));$o['priority']=array_sum(array_column($o['issues'],0));}unset($o);
+  $site[]=['invisible',"$invisible of $eligible published posts have no Google impressions in the last 30 days",'This is normal for a young site: Google has not indexed most pages yet. Speed it up: (1) Search Console › Sitemaps: submit /sitemap.xml and check it reads “Success”; (2) Search Console › Pages: see “Why pages aren’t indexed”; (3) URL Inspection › Request indexing for your 10 best posts; (4) get a few links from other websites (guest posts, Pinterest, social profiles). Then give it 2–6 weeks.'];
+ }
+ $GLOBALS['advisorSite']=$site;
  usort($out,fn($a,$b)=>$b['priority']<=>$a['priority']);
  return $out;
 }

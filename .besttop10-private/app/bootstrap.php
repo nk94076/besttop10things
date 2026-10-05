@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS clicks (id INTEGER PRIMARY KEY, link_id INTEGER NOT N
 CREATE INDEX IF NOT EXISTS clicks_created ON clicks(created_at);
 CREATE INDEX IF NOT EXISTS clicks_post ON clicks(post_id);
 CREATE INDEX IF NOT EXISTS clicks_link ON clicks(link_id);');
+$db->exec('CREATE TABLE IF NOT EXISTS redirects (from_path TEXT PRIMARY KEY, to_path TEXT NOT NULL, hits INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)');
 $db->exec('CREATE TABLE IF NOT EXISTS keyword_ideas (id INTEGER PRIMARY KEY, keyword TEXT NOT NULL UNIQUE, category_id INTEGER, source TEXT NOT NULL DEFAULT "", impressions INTEGER NOT NULL DEFAULT 0, position REAL NOT NULL DEFAULT 0, score INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT "new", post_id INTEGER, created_at TEXT NOT NULL)');
 $db->exec('CREATE TABLE IF NOT EXISTS post_revisions (id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL, title TEXT NOT NULL, meta_title TEXT NOT NULL DEFAULT "", meta_description TEXT NOT NULL DEFAULT "", tldr TEXT NOT NULL DEFAULT "", takeaways TEXT NOT NULL DEFAULT "", body TEXT NOT NULL, note TEXT NOT NULL DEFAULT "", created_at TEXT NOT NULL)');
 $db->exec('CREATE TABLE IF NOT EXISTS ai_suggestions (post_id INTEGER PRIMARY KEY, data TEXT NOT NULL, created_at TEXT NOT NULL)');
@@ -377,4 +378,17 @@ function autoLinks(string $html, int $postId, int $categoryId, int $max=4): stri
   }
  }
  return implode('',$parts);
+}
+
+// ---- 301 redirects (merged posts, changed slugs) ----
+function addRedirect(string $from, string $to): void {
+ if($from===$to||$from==='/'||!str_starts_with($from,'/')||!str_starts_with($to,'/'))return;
+ run('DELETE FROM redirects WHERE from_path=?',[$to]);                       // the target is live again
+ run('UPDATE redirects SET to_path=? WHERE to_path=?',[$to,$from]);          // no redirect chains
+ run('INSERT INTO redirects(from_path,to_path,created_at) VALUES (?,?,?) ON CONFLICT(from_path) DO UPDATE SET to_path=excluded.to_path',[$from,$to,date('c')]);
+}
+function redirectFor(string $path): ?string {
+ $r=query('SELECT to_path FROM redirects WHERE from_path=?',[$path])[0]['to_path']??null;
+ if($r!==null)run('UPDATE redirects SET hits=hits+1 WHERE from_path=?',[$path]);
+ return $r;
 }

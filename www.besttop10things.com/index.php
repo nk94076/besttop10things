@@ -6,7 +6,7 @@ require ROOT.'/app/layout.php';
 
 // Routing: clean URLs, with 301 redirects from the old "/?page=…" links.
 $path=rtrim(rawurldecode((string)parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH)),'/')?:'/';
-$routes=['/'=>'home','/index.php'=>'home','/reviews'=>'reviews','/top-10'=>'top10','/categories'=>'categories','/compare'=>'compare','/about'=>'about','/how-we-review'=>'methodology','/privacy'=>'privacy','/sitemap.xml'=>'sitemap','/robots.txt'=>'robots','/feed.xml'=>'feed','/llms.txt'=>'llms','/llms-full.txt'=>'llmsfull'];
+$routes=['/'=>'home','/index.php'=>'home','/reviews'=>'reviews','/top-10'=>'top10','/categories'=>'categories','/compare'=>'compare','/about'=>'about','/how-we-review'=>'methodology','/privacy'=>'privacy','/contact'=>'contact','/terms'=>'terms','/sitemap.xml'=>'sitemap','/robots.txt'=>'robots','/feed.xml'=>'feed','/llms.txt'=>'llms','/llms-full.txt'=>'llmsfull'];
 if(($routes[$path]??'')==='home'&&isset($_GET['page'])&&$_SERVER['REQUEST_METHOD']==='GET'){
  $target=cleanUrl('/?'.(string)($_SERVER['QUERY_STRING']??''));
  if(!str_starts_with($target,'/?')){header('Location: '.$target,true,301);exit;}
@@ -70,7 +70,7 @@ if($page==='sitemap'){
  $newest=$posts?substr(max(array_map(fn($r)=>max((string)$r['updated_at'],(string)$r['published_at']),$posts)),0,10):date('Y-m-d');
  $catMod=[];foreach($posts as $r)$catMod[$r['cslug']]=max($catMod[$r['cslug']]??'',substr(max((string)$r['updated_at'],(string)$r['published_at']),0,10));
  $urls=[['/',$newest,null]];
- foreach(['reviews','top10','categories','compare','about','methodology','privacy'] as $p)$urls[]=[pagePath($p),in_array($p,['reviews','top10','categories'],true)?$newest:null,null];
+ foreach(['reviews','top10','categories','compare','about','methodology','privacy','contact','terms'] as $p)$urls[]=[pagePath($p),in_array($p,['reviews','top10','categories'],true)?$newest:null,null];
  foreach(categories() as $c)if($c['total'])$urls[]=['/category/'.rawurlencode($c['slug']),$catMod[$c['slug']]??null,null];
  foreach(query('SELECT a.slug FROM authors a WHERE EXISTS (SELECT 1 FROM reviews r WHERE lower(r.author)=lower(a.name) AND '.live().')') as $a)$urls[]=['/author/'.rawurlencode($a['slug']),null,null];
  foreach($posts as $r)$urls[]=[reviewUrl($r),substr(max((string)$r['updated_at'],(string)$r['published_at']),0,10),safeImage($r['image'])?[absUrl($r['image']),$r['title']]:null];
@@ -121,10 +121,10 @@ if ($page==='review') {
  if(!$review) { http_response_code(404); $page='404'; }
 }
 if($page==='author'){$authorRow=query('SELECT * FROM authors WHERE slug=?',[(string)($_GET['author']??'')])[0]??null;if(!$authorRow){http_response_code(404);$page='404';}}
-$valid=['author','methodology','home','review','reviews','top10','categories','about','privacy','compare','404'];
+$valid=['author','methodology','home','review','reviews','top10','categories','about','privacy','contact','terms','compare','404'];
 if(!in_array($page,$valid,true)){http_response_code(404);$page='404';}
-$titles=['methodology'=>'How We Review','author'=>'','home'=>'','reviews'=>'All Reviews & Buying Guides','top10'=>'Top 10 Lists: Our Highest-Rated Picks','categories'=>'Browse All Categories','about'=>'About Us','privacy'=>'Privacy Policy','compare'=>'Compare Top-Rated Picks Side by Side','404'=>'Page not found'];
-$descs=['methodology'=>'How '.setting('site_name').' researches, compares and scores products: our review process, scoring scale and editorial independence.','reviews'=>'Browse every review and buying guide on '.setting('site_name').': honest trade-offs, practical tips and clear recommendations across tech, travel, shopping, lifestyle and more.','top10'=>'Our rated reviews ranked by review score, plus the latest buying guides, listed separately and unranked.','categories'=>'Explore reviews and buying guides by category, from tech and travel to fashion, home, education and more.','compare'=>'Compare rated reviews in the same category side by side: scores, pros and cons at a glance.','about'=>'Who we are, how we research and write our reviews, and how we keep our recommendations independent.','privacy'=>'How '.setting('site_name').' collects, uses and protects information, including cookies and outbound link tracking.','404'=>'The page you were looking for could not be found.'];
+$titles=['methodology'=>'How We Review','author'=>'','home'=>'','reviews'=>'All Reviews & Buying Guides','top10'=>'Top 10 Lists: Our Highest-Rated Picks','categories'=>'Browse All Categories','about'=>'About Us','privacy'=>'Privacy Policy','contact'=>'Contact Us','terms'=>'Terms of Use','compare'=>'Compare Top-Rated Picks Side by Side','404'=>'Page not found'];
+$descs=['contact'=>'How to reach the '.setting('site_name').' team: questions, corrections, partnership and advertising enquiries.','terms'=>'The terms for using '.setting('site_name').': content, affiliate links, advertising, external websites and limitation of liability.','methodology'=>'How '.setting('site_name').' researches, compares and scores products: our review process, scoring scale and editorial independence.','reviews'=>'Browse every review and buying guide on '.setting('site_name').': honest trade-offs, practical tips and clear recommendations across tech, travel, shopping, lifestyle and more.','top10'=>'Our rated reviews ranked by review score, plus the latest buying guides, listed separately and unranked.','categories'=>'Explore reviews and buying guides by category, from tech and travel to fashion, home, education and more.','compare'=>'Compare rated reviews in the same category side by side: scores, pros and cons at a glance.','about'=>'Who we are, how we research and write our reviews, and how we keep our recommendations independent.','privacy'=>'How '.setting('site_name').' collects, uses and protects information, including cookies and outbound link tracking.','404'=>'The page you were looking for could not be found.'];
 $base=siteBase();$crumb=fn(array $items)=>['@type'=>'BreadcrumbList','itemListElement'=>array_map(fn($i,$x)=>['@type'=>'ListItem','position'=>$i+1,'name'=>$x[0],'item'=>$base.$x[1]],array_keys($items),$items)];
 $seo=[];$pageTitle=$titles[$page]??'';$pageDesc=$descs[$page]??'';
 if($page==='review'){
@@ -381,10 +381,10 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
 </div></section>
 <section class="wrap section section-tight"><h2 class="section-title"><?= count($posts) ?> article<?= count($posts)===1?'':'s' ?> by <?= e($a['name']) ?></h2><?php if($posts): ?><div class="card-grid"><?php foreach($posts as $r) reviewCard($r); ?></div><?php else: ?><p class="muted">No published articles yet.</p><?php endif ?></section>
 
-<?php elseif($page==='about'||$page==='privacy'): ?>
+<?php elseif(in_array($page,['about','privacy','contact','terms'],true)): $pt=['about'=>['About','Behind the reviews','Clarity comes first.'],'privacy'=>['Privacy','Your information','Privacy Policy'],'contact'=>['Contact','Get in touch','Contact us'],'terms'=>['Terms','The small print','Terms of Use']][$page]; $mail=setting('org_email'); ?>
 <section class="page-hero"><div class="wrap narrow-wrap">
- <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><span><?= $page==='about'?'About':'Privacy' ?></span></nav>
- <p class="eyebrow"><?= $page==='about'?'Behind the reviews':'Your information' ?></p><h1 class="page-title"><?= $page==='about'?'Clarity comes first.':'Privacy' ?></h1>
+ <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a><?= ficon('right','ic ic-xs') ?><span><?= $pt[0] ?></span></nav>
+ <p class="eyebrow"><?= $pt[1] ?></p><h1 class="page-title"><?= $pt[2] ?></h1>
 </div></section>
 <section class="wrap narrow-wrap section section-tight"><div class="prose">
  <?php if($page==='about'): ?>
@@ -397,11 +397,40 @@ $headline=function(string $text): string { $w=preg_split('/\s+/',trim($text)); i
   <p>Some articles contain affiliate links. If you buy through them we may earn a commission, at no extra cost to you. This never changes how a product is described or scored.</p>
   <h2>Sample content</h2>
   <p>Content labelled as a sample is illustrative. Its scores and observations are not claims of hands-on testing.</p>
+  <h2>Contact</h2>
+  <p>Questions, corrections or suggestions are welcome: <a href="/contact">contact us</a>.</p>
+ <?php elseif($page==='contact'): ?>
+  <p>We read every message. Whether you spotted a mistake, have a question about an article, want to suggest a topic or have a business enquiry, write to us and we will reply as soon as we can, usually within two working days.</p>
+  <?php if($mail!==''): ?><p><b>Email:</b> <a href="mailto:<?= e($mail) ?>"><?= e($mail) ?></a></p><?php endif ?>
+  <h2>Corrections</h2>
+  <p>We want every guide to be accurate and up to date. If something is wrong or outdated, tell us which article and what should change, and we will review and update it.</p>
+  <h2>Advertising and partnerships</h2>
+  <p>We keep editorial content independent. Sponsored content is always labelled, and affiliate links never change how we describe or compare products. For partnership enquiries, please use the email above.</p>
+  <h2>Privacy</h2>
+  <p>We only use your email address to answer your message. See our <a href="/privacy">privacy policy</a>.</p>
+ <?php elseif($page==='terms'): ?>
+  <p>By using <?= e(setting('site_name')) ?> you agree to these terms. Please read them together with our <a href="/privacy">privacy policy</a>.</p>
+  <h2>Information only</h2>
+  <p>Our articles, guides and reviews are for general information. They are not professional, financial, medical or legal advice. Prices, availability and product details change; check them with the seller before you buy.</p>
+  <h2>Affiliate links and advertising</h2>
+  <p>Some links are affiliate links: if you buy through them we may earn a commission at no extra cost to you. The site may also show advertising, including ads served by Google. Ads and commissions help keep the site free and never change our editorial judgement.</p>
+  <h2>External websites</h2>
+  <p>We link to other websites for your convenience. We do not control them and are not responsible for their content, products, services or privacy practices.</p>
+  <h2>Content and copyright</h2>
+  <p>All text, graphics and design on this site belong to <?= e(setting('site_name')) ?> unless stated otherwise. You may share links and short quotes with a link back; please do not copy whole articles.</p>
+  <h2>Limitation of liability</h2>
+  <p>We work hard to keep information accurate, but we cannot guarantee it is complete or current. To the extent permitted by law, we are not liable for losses arising from the use of this website or of the websites we link to.</p>
+  <h2>Changes</h2>
+  <p>We may update these terms from time to time; the current version is always on this page. Questions? <a href="/contact">Contact us</a>.</p>
  <?php else: ?>
+
   <p>This website stores essential session cookies for secure CMS login and form protection. Public browsing does not require an account.</p>
   <p>If you subscribe to our newsletter, we store your email address so we can send you updates. You can ask us to remove it at any time.</p>
   <p>When you click a link to another website, such as a shop, we record the click so we can understand which articles are useful. This includes the time, the article and link, the page you came from, your IP address, approximate country if available, device and browser type, and a random visitor ID kept in a cookie. We do not record your name or email with clicks.</p>
   <p>CMS account information and editorial content are stored in the site's database. Failed login attempts are temporarily recorded to limit repeated attempts. The site measures visits with its own first-party analytics: the page viewed, the page or website you came from, approximate country (looked up from your IP address), time zone, language, device, browser, screen size, time on page, how far you scrolled and which links you clicked, linked by the same random visitor ID. This data stays on our server, is not sold or shared, IP addresses are deleted after 90 days and the rest after 13 months. We also use Google Analytics, which sets its own cookies.</p>
+  <h2>Advertising and cookies</h2>
+  <p>This site may show ads served by Google and other advertising partners. Third-party vendors, including Google, use cookies to serve ads based on your prior visits to this website or other websites. Google's use of advertising cookies enables it and its partners to serve ads based on your visits to this and other sites on the Internet. You can opt out of personalised advertising in <a href="https://adssettings.google.com" rel="nofollow noopener" target="_blank">Google Ads Settings</a> or at <a href="https://www.aboutads.info/choices/" rel="nofollow noopener" target="_blank">aboutads.info</a>. Learn more about <a href="https://policies.google.com/technologies/partner-sites" rel="nofollow noopener" target="_blank">how Google uses information from sites that use its services</a>.</p>
+  <p>Questions about privacy? <a href="/contact">Contact us</a>.</p>
   <p>Images configured by editors may load from third-party HTTPS hosts. Those hosts receive the network information needed to serve an image. Website server logs may also record requests.</p>
  <?php endif ?>
 </div></section>

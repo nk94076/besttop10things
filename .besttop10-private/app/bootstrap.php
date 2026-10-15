@@ -56,8 +56,8 @@ function live(): string { return "r.status='published' AND (r.published_at IS NU
 function categories(): array { return query('SELECT c.*, COUNT(r.id) AS total FROM categories c LEFT JOIN reviews r ON r.category_id=c.id AND '.live().' GROUP BY c.id ORDER BY c.id'); }
 function reviewUrl(array $r): string { return '/'.rawurlencode($r['slug']); }
 // Clean public URLs. Post slugs may not use these names.
-const RESERVED_SLUGS=['author','how-we-review','reviews','top-10','categories','category','compare','about','privacy','admin','admin-php','index-php','sitemap-xml','robots-txt','assets','uploads','search','feed'];
-function pagePath(string $page): string { return ['methodology'=>'/how-we-review','home'=>'/','reviews'=>'/reviews','top10'=>'/top-10','categories'=>'/categories','compare'=>'/compare','about'=>'/about','privacy'=>'/privacy'][$page]??'/'; }
+const RESERVED_SLUGS=['author','how-we-review','reviews','top-10','categories','category','compare','about','privacy','contact','terms','disclaimer','admin','admin-php','index-php','sitemap-xml','robots-txt','assets','uploads','search','feed'];
+function pagePath(string $page): string { return ['methodology'=>'/how-we-review','home'=>'/','reviews'=>'/reviews','top10'=>'/top-10','categories'=>'/categories','compare'=>'/compare','about'=>'/about','privacy'=>'/privacy','contact'=>'/contact','terms'=>'/terms'][$page]??'/'; }
 // Converts an old "/?page=…" link to its clean form; any other URL is returned unchanged.
 function cleanUrl(string $url): string {
  if(!str_starts_with($url,'/?'))return $url;

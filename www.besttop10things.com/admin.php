@@ -184,7 +184,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    indexNowPing(['/'.$a['slug'],'/'.$b['slug']]);
    flash('“'.$a['title'].'” now redirects (301) to “'.$b['title'].'” and was moved to the Trash. Copy any unique tips from it into the remaining post.','/admin.php?view=edit&id='.$dst);
   }
-  if(in_array($action,['advisor_settings','refresh_ideas','idea_status','idea_draft','ai_fixes','apply_fixes','discard_fixes','undo_revision','link_orphan','fix_cannibal','autopilot_settings','autopilot_run'],true)){
+  if(in_array($action,['advisor_settings','refresh_ideas','idea_status','idea_draft','ai_fixes','apply_fixes','discard_fixes','undo_revision','link_orphan','fix_cannibal','autopilot_settings','autopilot_run','rewrite_quality'],true)){
    $tab=(string)($_POST['tab']??'doctor');$back='/admin.php?view=advisor&tab='.rawurlencode($tab);
    if($action==='advisor_settings'){foreach(['advisor_weekly_fixes','advisor_auto_meta','advisor_auto_apply'] as $k)run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,isset($_POST[$k])?'1':'0']);flash('Content Advisor settings saved.',$back);}
    if($action==='refresh_ideas'){@set_time_limit(300);$n=refreshKeywordIdeas();flash("$n keyword ideas checked.",$back);}
@@ -196,6 +196,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     flash('The draft is being written in the background. Refresh this page in a minute.',$back);
    }
    if($action==='ai_fixes'){$pid=(int)($_POST['id']??0);queueFixes($pid);$log=processAiQueue(1);flash(($log?end($log):'Working on it… refresh in a minute.'),$back.'#post-'.$pid);}
+   if($action==='rewrite_quality'){@set_time_limit(600);$pid=(int)($_POST['id']??0);flash(rewriteQuality($pid),$back.($tab==='doctor'?'#post-'.$pid:''));}
    if($action==='fix_cannibal'){$pid=(int)($_POST['id']??0);flash(fixCannibal($pid),$back.'#post-'.$pid);}
    if($action==='autopilot_settings'){
     $vals=['autopilot_on'=>isset($_POST['autopilot_on'])?'1':'0','autopilot_hour'=>(string)max(0,min(23,(int)($_POST['autopilot_hour']??10))),'autopilot_posts'=>(string)max(1,min(30,(int)($_POST['autopilot_posts']??10)))];
@@ -634,8 +635,8 @@ if(!isset($titles[$view]))$view='dashboard';
    <?php endforeach ?></tbody></table></div>
  </div></section>
 
-<?php elseif($view==='advisor'): $tab=in_array($_GET['tab']??'',['doctor','ideas','autopilot','history'],true)?$_GET['tab']:'doctor'; $ai=aiAvailable(); ?>
- <section class="panel"><?= pageHead('trophy','Content Advisor','What to write next, why pages are not ranking, and AI-prepared fixes you can apply with one click.','<div class="seg-tabs">'.implode('',array_map(fn($k,$l)=>'<a class="'.($tab===$k?'active':'').'" href="/admin.php?view=advisor&tab='.$k.'">'.$l.'</a>',['doctor','ideas','autopilot','history'],['Content doctor','Keyword ideas','Autopilot','History'])).'</div>') ?>
+<?php elseif($view==='advisor'): $tab=in_array($_GET['tab']??'',['doctor','adsense','ideas','autopilot','history'],true)?$_GET['tab']:'doctor'; $ai=aiAvailable(); ?>
+ <section class="panel"><?= pageHead('trophy','Content Advisor','What to write next, why pages are not ranking, and AI-prepared fixes you can apply with one click.','<div class="seg-tabs">'.implode('',array_map(fn($k,$l)=>'<a class="'.($tab===$k?'active':'').'" href="/admin.php?view=advisor&tab='.$k.'">'.$l.'</a>',['doctor','adsense','ideas','autopilot','history'],['Content doctor','AdSense','Keyword ideas','Autopilot','History'])).'</div>') ?>
  <?php if(!$ai): ?><p class="notice">AI fixes and drafts need the AI assistant: <a href="/admin.php?view=seo#ai">connect it in SEO &amp; Code</a>. The diagnosis and keyword ideas work without it.</p><?php endif ?>
  <?php if(!gscKey()): ?><p class="notice">Connect <a href="/admin.php?view=search">Search Console</a> to add ranking data (missing searches, page-2 pages, low click-through) to the diagnosis.</p><?php endif ?>
  <?php if($tab==='doctor'): $diag=array_filter(diagnosePosts(),fn($d)=>$d['issues']); $sugs=[];foreach(query('SELECT * FROM ai_suggestions') as $x)$sugs[$x['post_id']]=json_decode($x['data'],true); ?>
@@ -644,9 +645,10 @@ if(!isset($titles[$view]))$view='dashboard';
   <p class="muted"><?= count($diag) ?> published post<?= count($diag)===1?'':'s' ?> with something to improve, most important first.<?= !$all&&count($diag)>15?' Showing the top 15 · <a href="/admin.php?view=advisor&tab=doctor&all=1">show all</a>':'' ?></p>
   <?php foreach(array_slice($diag,0,$all?200:15) as $d): $p=$d['post'];$sg=$sugs[$p['id']]??null; ?>
   <section class="box doc-card" id="post-<?= $p['id'] ?>">
-   <div class="doc-head"><div><a class="row-title" href="/admin.php?view=edit&id=<?= $p['id'] ?>"><?= e($p['title']) ?></a><br><span class="muted"><?= e($p['category']) ?> · SEO <?= $d['scores'][0] ?> · AI <?= $d['scores'][1] ?> · <a href="<?= e(reviewUrl($p)) ?>" target="_blank">view</a></span></div>
+   <div class="doc-head"><div><a class="row-title" href="/admin.php?view=edit&id=<?= $p['id'] ?>"><?= e($p['title']) ?></a><br><span class="muted"><?= e($p['category']) ?> · Quality <?= $d['quality'] ?> · SEO <?= $d['scores'][0] ?> · AI <?= $d['scores'][1] ?> · <a href="<?= e(reviewUrl($p)) ?>" target="_blank">view</a></span></div>
     <div class="row-buttons"><?php if($sg&&!empty($sg['pending'])): ?><span class="chip chip-amber">AI is working…</span><?php elseif(!$sg): ?><form method="post"><?= csrfField() ?><input type="hidden" name="action" value="ai_fixes"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="button button-primary button-sm" <?= $ai?'':'disabled' ?>><?= aicon('bulb') ?> Get AI fixes</button></form><?php endif ?></div></div>
    <ul class="check-list"><?php foreach($d['issues'] as $iss): [$sev,$code,$t,$detail]=$iss; ?><li class="<?= $sev>=3?'':'warn' ?>"><span><b><?= e($t) ?></b> — <?= e($detail) ?>
+    <?php if($code==='quality'): ?><form method="post" class="merge-form"><?= csrfField() ?><input type="hidden" name="action" value="rewrite_quality"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="button button-primary button-sm" <?= $ai?'':'disabled' ?>><?= aicon('bulb') ?> Rewrite for quality with AI</button></form><?php endif ?>
     <?php if($code==='orphan'): ?><form method="post" class="merge-form"><?= csrfField() ?><input type="hidden" name="action" value="link_orphan"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="button button-outline button-sm" <?= $ai?'':'disabled' ?>><?= aicon('bulb') ?> Fix: add links to it with AI</button></form><?php endif ?>
     <?php if($code==='cannibal'): ?><form method="post" class="merge-form"><?= csrfField() ?><input type="hidden" name="action" value="fix_cannibal"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="button button-outline button-sm" <?= $ai?'':'disabled' ?>><?= aicon('bulb') ?> Fix: give it its own keyword with AI</button></form><?php endif ?>
     <?php if($code==='cannibal'&&!empty($iss[4])): ?><form method="post" class="merge-form" data-confirm="Move this post to the Trash and redirect its URL (301) to the selected post?"><?= csrfField() ?><input type="hidden" name="action" value="merge_post"><input type="hidden" name="id" value="<?= $p['id'] ?>"><select class="input input-sm" name="into" aria-label="Merge into"><?php foreach($iss[4] as $pid): ?><option value="<?= (int)$pid ?>"><?= e($ptitles[$pid]??("#".$pid)) ?></option><?php endforeach ?></select><button class="button button-outline button-sm">Merge into this post</button></form><?php endif ?>
@@ -686,6 +688,34 @@ if(!isset($titles[$view]))$view='dashboard';
    </div></td></tr><?php endforeach ?>
   <?php if(!$ideas): ?><tr><td colspan="5" class="muted empty"><?= $status==='new'?'No ideas yet. Click “Find new ideas”.':'Nothing here.' ?></td></tr><?php endif ?>
   </tbody></table></div>
+ <?php elseif($tab==='adsense'):
+  $posts=query("SELECT r.*,c.name AS category FROM reviews r JOIN categories c ON c.id=r.category_id WHERE ".live());
+  $q=[];$weak=[];$foreign=[];$thin=[];foreach($posts as $p){[$s,$w,$wc]=qualityReport($p);$q[]=$s;if($s<75)$weak[]=[$p,$s,$w];if(detectLang($p['title'].' '.$p['body'])!=='en')$foreign[]=$p;if($wc<600)$thin[]=$p;}
+  usort($weak,fn($a,$b)=>$a[1]<=>$b[1]);$good=count($posts)-count($weak);$pct=$posts?round($good/count($posts)*100):0;
+  $ads=setting('ads_txt',ADS_TXT_DEFAULT);
+  $checks=[
+   [count($posts)>=25,'At least 25 published articles',count($posts).' published. Reviewers want a site that already has plenty of useful content.'],
+   [$pct>=90,'Strong content quality (90%+ of articles score 75+)',"$good of ".count($posts)." articles ($pct%) pass. Weak articles are the #1 reason for “Low value content” rejections."],
+   [!$thin,'No very short articles (under 600 words)',$thin?count($thin).' very short: rewrite them or move them to Drafts before applying.':'None.'],
+   [!$foreign,'One language across the site',$foreign?count($foreign).' article(s) not in English: '.implode(', ',array_map(fn($p)=>'“'.$p['title'].'”',array_slice($foreign,0,3))).'. Translate or move to Drafts.':'All articles are in English.'],
+   [setting('org_email')!=='','Contact page with an email address',setting('org_email')!==''?'Shown on /contact.':'Add your email in SEO & Code › Organisation e-mail; /contact shows it.'],
+   [true,'About, Contact, Privacy (with ad cookie notice) and Terms pages','Built in: /about, /contact, /privacy, /terms — linked in the footer.'],
+   [str_contains($ads,'pub-'),'ads.txt with your publisher ID',e(mb_strimwidth($ads,0,80,'…'))],
+   [(bool)gscKey(),'Google Search Console connected','Helps you see that Google indexes the site (reviewers check it is reachable and indexed).'],
+  ];
+ ?>
+  <section class="box"><h2 class="box-title"><?= aicon('trophy','icon title-icon') ?> Google AdSense readiness <span class="muted"><?= count(array_filter(array_column($checks,0))) ?>/<?= count($checks) ?> ready</span></h2>
+   <ul class="check-list"><?php foreach($checks as [$ok,$t,$d]): ?><li class="<?= $ok?'pass':'warn' ?>"><span><b><?= $ok?'✓':'✗' ?> <?= e($t) ?></b> — <?= $d ?></span></li><?php endforeach ?></ul>
+   <p class="hint">AdSense reviewers look for original, detailed, useful articles, clear navigation and the standard pages. When everything above is green, apply at <a href="https://adsense.google.com" target="_blank" rel="noopener">adsense.google.com</a> and paste the AdSense code in SEO &amp; Code › Header code. If you are rejected for “low value content”, improve more articles and re-apply after 2–4 weeks.</p>
+  </section>
+  <section class="box"><h2 class="box-title"><?= aicon('bulb','icon title-icon') ?> Articles to improve <span class="muted"><?= count($weak) ?> below 75/100</span></h2>
+   <p class="hint">“Rewrite for quality” turns an article into a detailed 1,500–2,200 word guide (specific steps, honest comparison, who it suits, common mistakes, FAQ) in the same language, keeping its URL and links. A copy is saved first (undo in History). The daily Autopilot also does this automatically, weakest first.</p>
+   <div class="table-wrap"><table class="list-table"><thead><tr><th>Article</th><th>Quality</th><th>Why</th><th></th></tr></thead><tbody>
+   <?php foreach(array_slice($weak,0,60) as [$p,$s,$w]): ?><tr><td><a class="row-title" href="/admin.php?view=edit&amp;id=<?= $p['id'] ?>"><?= e($p['title']) ?></a><br><span class="muted"><?= e($p['category']) ?></span></td><td><span class="seo-score <?= $s>=60?'ok':'bad' ?>"><?= $s ?></span></td><td class="muted"><?= e(implode('; ',$w)) ?></td>
+    <td><form method="post"><?= csrfField() ?><input type="hidden" name="action" value="rewrite_quality"><input type="hidden" name="tab" value="adsense"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="button button-primary button-sm" <?= $ai?'':'disabled' ?>><?= aicon('bulb') ?> Rewrite for quality</button></form></td></tr><?php endforeach ?>
+   <?php if(!$weak): ?><tr><td colspan="4" class="muted empty">Every published article scores 75 or more. 🎉</td></tr><?php endif ?>
+   </tbody></table></div>
+  </section>
  <?php elseif($tab==='autopilot'): $logDays=query('SELECT day,COUNT(*) n,SUM(ok=0) bad FROM autopilot_log GROUP BY day ORDER BY day DESC LIMIT 60');$day=preg_match('/^\d{4}-\d{2}-\d{2}$/',(string)($_GET['day']??''))?$_GET['day']:($logDays[0]['day']??date('Y-m-d'));$rows=query('SELECT l.*,r.title FROM autopilot_log l LEFT JOIN reviews r ON r.id=l.post_id WHERE l.day=? ORDER BY l.id',[$day]); ?>
   <section class="box"><h2 class="box-title"><?= aicon('clock','icon title-icon') ?> Daily autopilot <?= setting('autopilot_on')==='1'?'<span class="chip chip-teal">On</span>':'<span class="chip">Off</span>' ?></h2>
    <p class="hint">Every day at the chosen hour the site checks all published posts and fixes the most important problems by itself: new focus keyword when two posts compete, links from related articles to posts nobody links to, and content &amp; SEO fixes (title, description, quick answer, missing sections, FAQs) for low scores, thin, outdated or page-2 posts. A copy of every post is saved first, so anything can be undone in History. Each post is handled at most once every 14 days.</p>

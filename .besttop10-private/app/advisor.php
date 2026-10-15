@@ -98,8 +98,10 @@ function diagnosePosts(): array {
   $iss=[];$id=(int)$p['id'];$age=(time()-strtotime((string)($p['published_at']??$p['created_at'])))/86400;
   [$seo,$ai]=seoAnalyse($p);$s1=seoScore($seo);$s2=seoScore($ai);
   if($s1<100||$s2<100)$iss[]=[$s1<70||$s2<70?3:2,'analyser',"SEO $s1/100 · AI $s2/100",implode('; ',array_map(fn($c)=>$c[1],array_filter(array_merge($seo,$ai),fn($c)=>$c[0]!=='pass')))];
+  [$qs,$qwhy]=qualityReport($p);
+  if($qs<75)$iss[]=[3,'quality',"Content quality $qs/100",'Not yet strong enough for Google AdSense approval and good rankings: '.implode('; ',$qwhy).'. Use “Rewrite for quality” to turn it into a detailed, specific guide.'];
   $wc=str_word_count(strip_tags($p['body']));
-  if($wc<800)$iss[]=[2,'thin',"Short article ($wc words)",'Competing pages usually cover the topic in more depth. Add sections that answer related questions, with practical steps and examples.'];
+  if($wc<800&&$qs>=75)$iss[]=[2,'thin',"Short article ($wc words)",'Competing pages usually cover the topic in more depth. Add sections that answer related questions, with practical steps and examples.'];
   $upd=(time()-strtotime((string)$p['updated_at']))/86400;
   if($upd>180)$iss[]=[1,'stale','Not updated for '.round($upd).' days','Refresh facts, availability and the year in the title where relevant; Google favours recently maintained guides.'];
   if(empty($inbound[$p['slug']]))$iss[]=[1,'orphan','No in-article links point here','It is linked from its category hub and the “Related” sidebar, but no article mentions it in the text. Add a sentence with a link to it in 1–2 related articles.'];
@@ -121,7 +123,7 @@ function diagnosePosts(): array {
    }
   }
   usort($iss,fn($a,$b)=>$b[0]<=>$a[0]);
-  $out[]=['post'=>$p,'issues'=>$iss,'priority'=>array_sum(array_column($iss,0)),'missing'=>$missing??[],'scores'=>[$s1,$s2]];
+  $out[]=['post'=>$p,'issues'=>$iss,'priority'=>array_sum(array_column($iss,0)),'missing'=>$missing??[],'scores'=>[$s1,$s2],'quality'=>$qs];
   unset($missing);
  }
  // When most pages have no impressions it is a site-wide indexing problem: report it once, not per post.
@@ -282,8 +284,9 @@ function runAutopilot(?int $max=null): array {
   $done++;$title='“'.$d['post']['title'].'”';
   $steps=[];
   if(in_array('cannibal',$codes,true))$steps[]=['New focus keyword',fn()=>fixCannibal($id)];
+  if(in_array('quality',$codes,true))$steps[]=['Quality rewrite',fn()=>rewriteQuality($id)];
   if(array_intersect(['orphan','invisible'],$codes))$steps[]=['Internal links',fn()=>linkOrphan($id)];
-  if(array_intersect(['analyser','thin','stale','page2','missing','ctr','cannibal-gsc'],$codes))$steps[]=['Content & SEO fixes',function()use($id){$f=generateFixes($id);return applyFixes($id,['meta'=>1,'tldr'=>1,'sections'=>array_keys($f['new_sections']??[]),'faq'=>array_keys($f['faq']??[])]);}];
+  if(!in_array('quality',$codes,true)&&array_intersect(['analyser','thin','stale','page2','missing','ctr','cannibal-gsc'],$codes))$steps[]=['Content & SEO fixes',function()use($id){$f=generateFixes($id);return applyFixes($id,['meta'=>1,'tldr'=>1,'sections'=>array_keys($f['new_sections']??[]),'faq'=>array_keys($f['faq']??[])]);}];
   foreach($steps as [$label,$fn]){
    try{$msg=$fn();autopilotLog($label,$id,true,"$title: $msg");$out[]="$label $title: $msg";}
    catch(Throwable $e){autopilotLog($label,$id,false,"$title: ".$e->getMessage());$out[]="$label $title failed: ".$e->getMessage();}
@@ -291,6 +294,59 @@ function runAutopilot(?int $max=null): array {
  }
  autopilotLog($done?'Summary':'Checked',null,true,$done?"Worked on $done post".($done===1?'':'s').' today.':'All posts are in good shape — nothing to fix today.');
  return $out;
+}
+
+// ---- Content quality (what AdSense "low value content" reviews and Google's helpful-content system look at) ----
+const FILLER_WORDS=['journey','navigating','navigate the','landscape','whether you\'re','unlock','seamless','elevate','delve','in today\'s','fast-paced','ever-evolving','game-changer','look no further','tapestry','embark','realm','it\'s important to note','in conclusion','plethora','myriad','crucial role','when it comes to'];
+function qualityRules(): string { return "Quality bar (this decides whether the site is approved for Google AdSense and ranks in Google):\n".
+ "- Be specific and practical: concrete examples, real situations, step-by-step instructions, checklists, the questions a reader should ask, common mistakes and how to avoid them, who each option suits and who it does not.\n".
+ "- Compare the realistic alternatives (types of products, services or approaches) with honest pros and cons, so the article is useful even to someone who buys nothing.\n".
+ "- Write like an experienced human editor: short paragraphs, plain words, direct answers, varied sentences. Never use filler such as: ".implode(', ',FILLER_WORDS).". Avoid stacking hedges (may, might, can help, often).\n".
+ "- Mention a brand at most 3–4 times, neutrally, with its limits as well as its strengths; the article must not read like an advert.\n".
+ "- Never invent facts: no made-up prices, specs, statistics, test results, quotes or claims of hands-on testing. Give ranges and rules of thumb instead."; }
+
+// Score 0–100 and the reasons, from the article text alone.
+function qualityReport(array $p): array {
+ $body=(string)$p['body'];$plain=mb_strtolower(preg_replace('/[#*>`_]|\[([^\]]*)\]\([^)]*\)/u',' $1 ',$body));
+ $words=max(1,str_word_count($plain));$per=fn(int $n)=>$n*1000/$words;
+ $score=100;$why=[];
+ if($words<1000){$score-=25;$why[]="only $words words (aim for 1,500+)";}elseif($words<1400){$score-=10;$why[]="$words words (aim for 1,500+)";}
+ $h2=preg_match_all('/^##\s/m',$body);if($h2<5){$score-=10;$why[]="$h2 sections (aim for 6+)";}
+ $fill=0;foreach(FILLER_WORDS as $f)$fill+=substr_count($plain,$f);if($per($fill)>2.5){$score-=15;$why[]="$fill filler phrases (journey, navigating…)";}
+ $hedge=0;foreach([' may ',' might ',' can help',' often '] as $h)$hedge+=substr_count($plain,$h);if($per($hedge)>10){$score-=10;$why[]="vague wording ($hedge × may/might/can help/often)";}
+ if(!preg_match('/^##\s+(faqs?|frequently asked|häufig|questions fréquentes)/imu',$body)){$score-=10;$why[]='no FAQ section';}
+ if(!preg_match('/^\s*(?:[-*]|\d+\.)\s/m',$body)){$score-=5;$why[]='no lists or steps';}
+ $brand=trim((string)($p['brand']??''));if($brand!==''&&$per(substr_count($plain,mb_strtolower($brand)))>5){$score-=10;$why[]="mentions “{$brand}” very often (reads like an advert)";}
+ if(!preg_match('~\]\(/[a-z0-9-]+\)~',$body)){$score-=5;$why[]='no links to other articles on the site';}
+ return [max(0,$score),$why,$words];
+}
+
+// Full rewrite to the quality bar, keeping title, URL, language and every existing link.
+function rewriteQuality(int $postId): string {
+ $p=query('SELECT r.*,c.name AS category FROM reviews r JOIN categories c ON c.id=r.category_id WHERE r.id=?',[$postId])[0]??null;
+ if(!$p)throw new RuntimeException('Post not found.');
+ [$before,$why]=qualityReport($p);
+ preg_match_all('/\[[^\]]+\]\(([^)\s]+)\)/u',$p['body'],$lm);$links=array_values(array_unique($lm[0]));
+ $related=array_map(fn($r)=>'- ['.$r['title'].'](/'.$r['slug'].')',query('SELECT title,slug FROM reviews r WHERE '.live().' AND r.id!=? AND category_id=? ORDER BY published_at DESC LIMIT 6',[$postId,$p['category_id']]));
+ $prompt="Rewrite this article into a high-quality, genuinely helpful guide. Keep the same topic, title intent and language.\n\nTitle: {$p['title']}\nCategory: {$p['category']}\nFocus keyword: ".($p['focus_keyword']?:'(choose one)')."\n".($p['brand']?"Brand featured: {$p['brand']}\n":'').
+  "Problems with the current version: ".($why?implode('; ',$why):'too generic')."\n\n".qualityRules()."\n\n".
+  "Structure for body_markdown (1,500–2,200 words): a 2–3 sentence direct answer first (with the focus keyword); then 6–9 ## sections, several phrased as questions, including a practical checklist or step-by-step section, an honest comparison of the main options or approaches, 'Who it suits / who should skip it' and 'Common mistakes'; then '## Frequently Asked Questions' with 4–6 **Question?** lines each followed by a 2–4 sentence answer; end with '## Final Thoughts'. Use bulleted or numbered lists where they help. No tables, no HTML.\n".
+  ($links?"Keep each of these existing links somewhere natural in the text, exactly as written:\n".implode("\n",$links)."\n":'').
+  ($related?"Also link naturally to 1–2 of these related articles:\n".implode("\n",$related)."\n":'').
+  "\nAlso return: meta_title (40–60 characters with the focus keyword), meta_description (130–155 characters), excerpt (1–2 sentences), tldr (1–3 sentence quick answer, max 300 characters), takeaways (3–5 short lines).\n\nCurrent article:\n".mb_substr($p['body'],0,12000);
+ $str=['type'=>'string'];
+ $d=aiJson($prompt,aiObject(['body_markdown'=>$str,'meta_title'=>$str,'meta_description'=>$str,'excerpt'=>$str,'tldr'=>$str,'takeaways'=>['type'=>'array','items'=>$str]],'rewrite'),32000,'medium','draft');
+ $body=trim(str_replace("\r",'',(string)$d['body_markdown']));
+ $missing=array_values(array_filter($links,fn($l)=>!str_contains($body,$l)));
+ if($missing)$body.="\n\n## Useful links\n\n".implode("\n",array_map(fn($l)=>'- '.$l,$missing));
+ $new=$p;$new['body']=$body;[$after,,$words]=qualityReport($new);
+ if($words<900)throw new RuntimeException("The AI rewrite was too short ($words words); the article was not changed. Try again.");
+ if($after<$before)throw new RuntimeException("The rewrite scored lower ($after vs $before); the article was not changed.");
+ saveRevision($p,"Before quality rewrite (quality $before/100)");
+ run('UPDATE reviews SET body=?,meta_title=?,meta_description=?,excerpt=?,tldr=?,takeaways=?,updated_at=? WHERE id=?',[$body."\n",mb_substr(trim($d['meta_title']),0,200),mb_substr(trim($d['meta_description']),0,500),mb_substr(trim($d['excerpt']),0,600),mb_substr(trim($d['tldr']),0,700),implode("\n",array_slice(array_map('trim',$d['takeaways']),0,6)),date('c'),$postId]);
+ run('DELETE FROM ai_suggestions WHERE post_id=?',[$postId]);
+ if($p['status']==='published')indexNowPing([reviewUrl($p)]);
+ return "Rewritten: quality $before → $after/100, $words words. Undo in History if needed.";
 }
 
 function undoRevision(int $revId): string {
@@ -314,7 +370,7 @@ function writeDraft(int $ideaId): int {
  $related=array_map(fn($r)=>'- ['.$r['title'].'](/'.$r['slug'].')',query('SELECT title,slug FROM reviews r WHERE '.live().' AND category_id=? ORDER BY published_at DESC LIMIT 6',[$cat['id']]));
  $prompt="Write a complete, genuinely useful article for the search query: \"{$i['keyword']}\" (category: {$cat['name']}).\n\n".
   "Requirements:\n- 1,200–1,800 words of Markdown in body_markdown. Start with a 2–3 sentence direct answer that uses the focus keyword. Then 5–8 ## sections (several phrased as questions), at least one bulleted list, practical steps, honest trade-offs and who each option suits. End with a '## Frequently Asked Questions' section (4–5 **Question?** lines, each followed by a short answer) and a short '## Final Thoughts'.\n".
-  "- Do not mention specific product prices, specs, ratings or test results; give criteria and rules of thumb instead. Do not claim we tested anything.\n".
+  qualityRules()."\n".
   "- Link naturally to 1–3 of these related articles on our site where relevant (use the exact Markdown links):\n".($related?implode("\n",$related):'(none yet)')."\n".
   "- title: an engaging H1 (max 70 characters). meta_title: 40–60 characters with the focus keyword. meta_description: 130–155 characters with the focus keyword. focus_keyword: the main 2–4 word phrase. excerpt: 1–2 sentences for article cards. tldr: 1–3 sentence quick answer (max 300 characters). takeaways: 3–5 short lines.";
  $d=aiJson($prompt,draftSchema(),32000,'medium','draft');

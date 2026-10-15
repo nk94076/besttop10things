@@ -76,7 +76,7 @@ function footerView(): void { ?>
 </div></section>
 <footer class="site-footer"><div class="wrap footer-row">
  <div><?= siteLogo('logo logo-sm') ?><p class="footer-tag">A little more clarity. A better everyday choice.<br>Reviews and guides for the way you live.</p></div>
- <nav class="footer-links" aria-label="Footer"><a href="/categories">Explore categories</a><a href="/how-we-review">How we review</a><a href="/about">About</a><a href="/privacy">Privacy</a></nav>
+ <nav class="footer-links" aria-label="Footer"><a href="/categories">Explore categories</a><a href="/how-we-review">How we review</a><a href="/about">About</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
 </div><div class="wrap footer-bottom"><span>© <?= date('Y') ?> <?= e(setting('site_name')) ?>. All rights reserved.</span></div></footer>
 <?= customCode('code_footer') ?>
 </body></html>

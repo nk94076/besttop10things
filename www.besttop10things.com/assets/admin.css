@@ -546,7 +546,7 @@ nav.tabs{display:inline-flex;margin:4px 0 12px}
 .fm-file-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:center}
 @media (max-width:900px){.fm{grid-template-columns:1fr}.fm-tree{position:static;max-height:none}}
 /* Autopilot */
-.ap-grid{display:grid;grid-template-columns:repeat(2,minmax(0,220px));gap:14px}
+.ap-grid{display:grid;grid-template-columns:repeat(3,minmax(0,220px));gap:14px}
 .ap-grid label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--muted)}
 .ap-log{display:grid;grid-template-columns:220px minmax(0,1fr);gap:18px;align-items:start;margin-top:18px}
 .ap-days{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:8px}

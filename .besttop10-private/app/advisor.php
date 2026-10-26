@@ -276,6 +276,9 @@ function runAutopilot(?int $max=null): array {
  @set_time_limit(0);$max??=max(1,min(30,(int)setting('autopilot_posts','10')));
  if(!aiAvailable()){autopilotLog('Skipped',null,false,'No AI is connected (Admin › SEO & Code › AI assistant).');return ['No AI connected'];}
  $out=processAiQueue(5);$done=0;
+ // Hidden (weak) articles first: rewrite and bring back. Then new articles once a week.
+ $h=improveHiddenPosts(max(1,intdiv($max,2)));$out=array_merge($out,$h);$done+=count($h);
+ $out=array_merge($out,autopilotNewArticles());
  $recent=array_flip(array_column(query("SELECT DISTINCT post_id FROM autopilot_log WHERE ok=1 AND post_id IS NOT NULL AND day>?",[date('Y-m-d',strtotime('-14 days'))]),'post_id'));
  foreach(diagnosePosts() as $d){
   if($done>=$max)break;
@@ -347,6 +350,61 @@ function rewriteQuality(int $postId): string {
  run('DELETE FROM ai_suggestions WHERE post_id=?',[$postId]);
  if($p['status']==='published')indexNowPing([reviewUrl($p)]);
  return "Rewritten: quality $before → $after/100, $words words. Undo in History if needed.";
+}
+
+// ---- AdSense clean-up: hide weak articles while they are improved, bring them back when they pass ----
+function hiddenForQuality(): array { return array_map('intval',json_decode(setting('adsense_hidden','[]'),true)?:[]); }
+function saveHidden(array $ids): void { run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['adsense_hidden',json_encode(array_values(array_unique($ids)))]); }
+// Moves published articles scoring under $min, or not in English, to Drafts (reversible). Returns how many.
+function hideWeakPosts(int $min=60): int {
+ $ids=hiddenForQuality();$n=0;
+ foreach(query("SELECT * FROM reviews r WHERE ".live()) as $p){
+  [$q]=qualityReport($p);
+  if($q<$min||detectLang($p['title'].' '.$p['body'])!=='en'){run("UPDATE reviews SET status='draft' WHERE id=?",[$p['id']]);$ids[]=(int)$p['id'];$n++;}
+ }
+ saveHidden($ids);
+ return $n;
+}
+function restoreHiddenPosts(): int {
+ $ids=hiddenForQuality();$n=0;
+ foreach($ids as $id){run("UPDATE reviews SET status='published' WHERE id=? AND status='draft'",[$id]);$n++;}
+ saveHidden([]);
+ return $n;
+}
+// Autopilot step: rewrite hidden articles and publish them again once they score 75+ (English only).
+function improveHiddenPosts(int $max): array {
+ $out=[];$ids=hiddenForQuality();$left=$ids;
+ foreach($ids as $id){
+  if($max<=0)break;
+  $p=query('SELECT * FROM reviews WHERE id=?',[$id])[0]??null;
+  if(!$p||$p['status']!=='draft'){$left=array_diff($left,[$id]);continue;}
+  $title='“'.$p['title'].'”';
+  if(detectLang($p['title'].' '.$p['body'])!=='en'){continue;}
+  $max--;
+  try{$msg=rewriteQuality($id);autopilotLog('Quality rewrite',$id,true,"$title (hidden): $msg");$out[]="Quality rewrite $title: $msg";}
+  catch(Throwable $e){autopilotLog('Quality rewrite',$id,false,"$title (hidden): ".$e->getMessage());$out[]="Quality rewrite $title failed: ".$e->getMessage();continue;}
+  $p=query('SELECT * FROM reviews WHERE id=?',[$id])[0];[$q]=qualityReport($p);
+  if($q>=75){run("UPDATE reviews SET status='published',updated_at=? WHERE id=?",[date('c'),$id]);$left=array_diff($left,[$id]);autopilotLog('Published again',$id,true,"$title passes the quality check ($q/100) and is live again.");indexNowPing([reviewUrl($p)]);}
+ }
+ saveHidden($left);
+ return $out;
+}
+// Autopilot step: new articles from the best keyword ideas, once a week.
+function autopilotNewArticles(): array {
+ $n=max(0,min(5,(int)setting('autopilot_new_week','0')));
+ if(!$n||time()-strtotime(setting('autopilot_new_last')?:'2000-01-01')<7*86400)return [];
+ run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',['autopilot_new_last',date('c')]);
+ $out=[];
+ foreach(query("SELECT id,keyword FROM keyword_ideas WHERE status='new' AND post_id IS NULL ORDER BY score DESC,impressions DESC LIMIT $n") as $i){
+  try{
+   $id=writeDraft((int)$i['id']);$p=query('SELECT * FROM reviews WHERE id=?',[$id])[0];[$q]=qualityReport($p);
+   $pub=setting('autopilot_new_publish')==='1'&&$q>=75;
+   if($pub){run("UPDATE reviews SET status='published',published_at=? WHERE id=?",[now(),$id]);indexNowPing([reviewUrl($p)]);}
+   $msg='“'.$p['title'].'” written for “'.$i['keyword']."” (quality $q/100) — ".($pub?'published.':'saved as a draft for you to check and publish.');
+   autopilotLog('New article',$id,true,$msg);$out[]="New article: $msg";
+  }catch(Throwable $e){autopilotLog('New article',null,false,'“'.$i['keyword'].'”: '.$e->getMessage());$out[]='New article failed: '.$e->getMessage();}
+ }
+ return $out;
 }
 
 function undoRevision(int $revId): string {

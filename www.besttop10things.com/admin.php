@@ -184,7 +184,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
    indexNowPing(['/'.$a['slug'],'/'.$b['slug']]);
    flash('“'.$a['title'].'” now redirects (301) to “'.$b['title'].'” and was moved to the Trash. Copy any unique tips from it into the remaining post.','/admin.php?view=edit&id='.$dst);
   }
-  if(in_array($action,['advisor_settings','refresh_ideas','idea_status','idea_draft','ai_fixes','apply_fixes','discard_fixes','undo_revision','link_orphan','fix_cannibal','autopilot_settings','autopilot_run','rewrite_quality'],true)){
+  if(in_array($action,['advisor_settings','refresh_ideas','idea_status','idea_draft','ai_fixes','apply_fixes','discard_fixes','undo_revision','link_orphan','fix_cannibal','autopilot_settings','autopilot_run','rewrite_quality','adsense_hide','adsense_restore'],true)){
    $tab=(string)($_POST['tab']??'doctor');$back='/admin.php?view=advisor&tab='.rawurlencode($tab);
    if($action==='advisor_settings'){foreach(['advisor_weekly_fixes','advisor_auto_meta','advisor_auto_apply'] as $k)run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,isset($_POST[$k])?'1':'0']);flash('Content Advisor settings saved.',$back);}
    if($action==='refresh_ideas'){@set_time_limit(300);$n=refreshKeywordIdeas();flash("$n keyword ideas checked.",$back);}
@@ -196,10 +196,12 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     flash('The draft is being written in the background. Refresh this page in a minute.',$back);
    }
    if($action==='ai_fixes'){$pid=(int)($_POST['id']??0);queueFixes($pid);$log=processAiQueue(1);flash(($log?end($log):'Working on it… refresh in a minute.'),$back.'#post-'.$pid);}
+   if($action==='adsense_hide'){$n=hideWeakPosts();flash("$n article".($n===1?'':'s').' moved to Drafts. The Autopilot rewrites them and publishes them again once they pass.',$back);}
+   if($action==='adsense_restore'){$n=restoreHiddenPosts();flash("$n article".($n===1?'':'s').' published again.',$back);}
    if($action==='rewrite_quality'){@set_time_limit(600);$pid=(int)($_POST['id']??0);flash(rewriteQuality($pid),$back.($tab==='doctor'?'#post-'.$pid:''));}
    if($action==='fix_cannibal'){$pid=(int)($_POST['id']??0);flash(fixCannibal($pid),$back.'#post-'.$pid);}
    if($action==='autopilot_settings'){
-    $vals=['autopilot_on'=>isset($_POST['autopilot_on'])?'1':'0','autopilot_hour'=>(string)max(0,min(23,(int)($_POST['autopilot_hour']??10))),'autopilot_posts'=>(string)max(1,min(30,(int)($_POST['autopilot_posts']??10)))];
+    $vals=['autopilot_on'=>isset($_POST['autopilot_on'])?'1':'0','autopilot_hour'=>(string)max(0,min(23,(int)($_POST['autopilot_hour']??10))),'autopilot_posts'=>(string)max(1,min(30,(int)($_POST['autopilot_posts']??10))),'autopilot_new_week'=>(string)max(0,min(5,(int)($_POST['autopilot_new_week']??0))),'autopilot_new_publish'=>isset($_POST['autopilot_new_publish'])?'1':'0'];
     foreach($vals as $k=>$v)run('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[$k,$v]);
     flash($vals['autopilot_on']==='1'?'Autopilot is on: it runs every day at '.date('g:00 a',mktime((int)$vals['autopilot_hour'],0)).'.':'Autopilot is off.',$back);
    }
@@ -708,6 +710,16 @@ if(!isset($titles[$view]))$view='dashboard';
    <ul class="check-list"><?php foreach($checks as [$ok,$t,$d]): ?><li class="<?= $ok?'pass':'warn' ?>"><span><b><?= $ok?'✓':'✗' ?> <?= e($t) ?></b> — <?= $d ?></span></li><?php endforeach ?></ul>
    <p class="hint">AdSense reviewers look for original, detailed, useful articles, clear navigation and the standard pages. When everything above is green, apply at <a href="https://adsense.google.com" target="_blank" rel="noopener">adsense.google.com</a> and paste the AdSense code in SEO &amp; Code › Header code. If you are rejected for “low value content”, improve more articles and re-apply after 2–4 weeks.</p>
   </section>
+  <?php $hidden=hiddenForQuality();$toHide=count(array_filter($weak,fn($w)=>$w[1]<60))+count(array_filter($foreign,fn($p)=>!in_array((int)$p['id'],array_map(fn($w)=>(int)$w[0]['id'],array_filter($weak,fn($w)=>$w[1]<60)),true))); ?>
+  <section class="box"><h2 class="box-title"><?= aicon('gear','icon title-icon') ?> Step 1: hide weak articles while they are improved</h2>
+   <p class="hint">AdSense judges the whole site, so a few weak pages can cause a “Low value content” rejection. This moves every article scoring under 60 and every non-English article to <b>Drafts</b> (nothing is deleted, URLs stay reserved). The daily Autopilot then rewrites them and <b>publishes each one again automatically</b> once it scores 75+. Non-English articles stay hidden until you translate or delete them.</p>
+   <div class="row-buttons">
+    <form method="post" data-confirm="Move <?= $toHide ?> weak or non-English articles to Drafts until they are improved?"><?= csrfField() ?><input type="hidden" name="action" value="adsense_hide"><input type="hidden" name="tab" value="adsense"><button class="button button-primary" <?= $toHide?'':'disabled' ?>>Hide <?= $toHide ?> weak article<?= $toHide===1?'':'s' ?></button></form>
+    <?php if($hidden): ?><form method="post" data-confirm="Publish all <?= count($hidden) ?> hidden articles again now, without improving them?"><?= csrfField() ?><input type="hidden" name="action" value="adsense_restore"><input type="hidden" name="tab" value="adsense"><button class="button button-outline">Publish the <?= count($hidden) ?> hidden articles again</button></form><?php endif ?>
+   </div>
+   <?php if($hidden): ?><p class="hint"><b><?= count($hidden) ?> article<?= count($hidden)===1?' is':'s are' ?> hidden</b> and waiting for the Autopilot: <?= e(implode(', ',array_map(fn($r)=>'“'.$r['title'].'”',query('SELECT title FROM reviews WHERE id IN ('.implode(',',$hidden).') LIMIT 8')))) ?><?= count($hidden)>8?' …':'' ?></p><?php endif ?>
+   <p class="hint"><b>Step 2:</b> turn on the Autopilot (Autopilot tab) with 10 posts a day and 2–3 new articles a week. <b>Step 3:</b> when the checklist above is all green and visitors arrive every day, request the AdSense review again.</p>
+  </section>
   <section class="box"><h2 class="box-title"><?= aicon('bulb','icon title-icon') ?> Articles to improve <span class="muted"><?= count($weak) ?> below 75/100</span></h2>
    <p class="hint">“Rewrite for quality” turns an article into a detailed 1,500–2,200 word guide (specific steps, honest comparison, who it suits, common mistakes, FAQ) in the same language, keeping its URL and links. A copy is saved first (undo in History). The daily Autopilot also does this automatically, weakest first.</p>
    <div class="table-wrap"><table class="list-table"><thead><tr><th>Article</th><th>Quality</th><th>Why</th><th></th></tr></thead><tbody>
@@ -724,7 +736,9 @@ if(!isset($titles[$view]))$view='dashboard';
     <div class="ap-grid">
      <label>Run every day at<select class="input" name="autopilot_hour"><?php for($h=0;$h<24;$h++): ?><option value="<?= $h ?>" <?= (int)setting('autopilot_hour','10')===$h?'selected':'' ?>><?= date('g:00 a',mktime($h,0)) ?></option><?php endfor ?></select></label>
      <label>Posts to fix per day<select class="input" name="autopilot_posts"><?php foreach([3,5,10,15,20,30] as $n): ?><option <?= (int)setting('autopilot_posts','10')===$n?'selected':'' ?>><?= $n ?></option><?php endforeach ?></select></label>
+     <label>New articles per week<select class="input" name="autopilot_new_week"><?php foreach([0,1,2,3,4,5] as $n): ?><option value="<?= $n ?>" <?= (int)setting('autopilot_new_week','0')===$n?'selected':'' ?>><?= $n?:'None' ?></option><?php endforeach ?></select></label>
     </div>
+    <label class="check-row"><input type="checkbox" name="autopilot_new_publish" <?= setting('autopilot_new_publish')==='1'?'checked':'' ?>> <span>Publish new articles automatically when they score 75+ (otherwise they wait in Drafts for you to read and publish — recommended while applying for AdSense)</span></label>
     <p class="hint">Time zone: India (<?= e(date('g:i a')) ?> now). Needs the hourly cron job <code>php scripts/content-advisor.php</code> (already set up for the Content Advisor). Free Gemini has a daily limit; if it is reached, the rest is retried the next day.<?= setting('autopilot_last')?' Last run: '.e(date('M j',strtotime(setting('autopilot_last')))).'.':'' ?></p>
     <div class="row-buttons"><button class="button button-primary">Save</button></div></form>
    <form method="post" class="row-buttons" data-confirm="Run the autopilot now for 2 posts? This takes 1–3 minutes."><?= csrfField() ?><input type="hidden" name="action" value="autopilot_run"><input type="hidden" name="tab" value="autopilot"><button class="button button-outline" <?= $ai?'':'disabled' ?>><?= aicon('send') ?> Run now (2 posts)</button></form>
